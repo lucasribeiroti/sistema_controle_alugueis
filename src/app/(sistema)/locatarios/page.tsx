@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Plus, Users } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
@@ -10,10 +11,14 @@ export default async function LocatariosPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Proteção da página
+  if (!user) {
+    redirect("/login");
+  }
+
   const { data: locatarios, error } = await supabase
     .from("locatarios")
-    .select(
-      `
+    .select(`
       id,
       nome,
       tipo_pessoa,
@@ -22,9 +27,8 @@ export default async function LocatariosPage() {
       email,
       ativo,
       criado_em
-    `,
-    )
-    .eq("usuario_id", user!.id)
+    `)
+    .eq("usuario_id", user.id)
     .order("nome", { ascending: true });
 
   if (error) {
@@ -36,10 +40,13 @@ export default async function LocatariosPage() {
   }
 
   return (
-    <div>
-      <div className="mb-8 flex items-center justify-between">
+    <div className="space-y-8">
+      {/* Cabeçalho */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Locatários</h1>
+          <h1 className="text-3xl font-bold text-slate-900">
+            Locatários
+          </h1>
 
           <p className="mt-2 text-slate-500">
             Gerencie as pessoas e empresas que alugam seus imóveis.
@@ -55,11 +62,13 @@ export default async function LocatariosPage() {
         </Link>
       </div>
 
+      {/* Erro */}
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">
           Não foi possível carregar os locatários.
         </div>
       ) : !locatarios || locatarios.length === 0 ? (
+        /* Estado vazio */
         <div className="flex min-h-80 flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-8 text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-blue-600">
             <Users size={26} />
@@ -83,6 +92,7 @@ export default async function LocatariosPage() {
           </Link>
         </div>
       ) : (
+        /* Tabela */
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -120,12 +130,19 @@ export default async function LocatariosPage() {
                     key={locatario.id}
                     className="transition hover:bg-slate-50"
                   >
-                    <td className="px-6 py-4 font-medium text-slate-900">
-                      {locatario.nome}
+                    {/* Nome clicável */}
+                    <td className="px-6 py-4 font-medium">
+                      <Link
+                        href={`/locatarios/${locatario.id}`}
+                        className="text-slate-900 transition hover:text-blue-600 hover:underline"
+                      >
+                        {locatario.nome}
+                      </Link>
                     </td>
 
+                    {/* PF / PJ */}
                     <td className="px-6 py-4 text-sm text-slate-600">
-                      {locatario.tipo_pessoa === "juridica"
+                      {locatario.tipo_pessoa === "PJ"
                         ? "Pessoa Jurídica"
                         : "Pessoa Física"}
                     </td>
