@@ -1,5 +1,11 @@
 import Link from 'next/link'
-import { ArrowLeft, Building2, UserRound } from 'lucide-react'
+import {
+  ArrowLeft,
+  Building2,
+  CalendarClock,
+  CircleDollarSign,
+  UserRound,
+} from 'lucide-react'
 import { notFound, redirect } from 'next/navigation'
 
 import { createClient } from '@/lib/supabase/server'
@@ -22,6 +28,9 @@ type ContratoEdicao = {
 
   valor_mensal: number | string | null
   dia_vencimento: number | null
+
+  data_primeiro_vencimento: string | null
+  valor_primeira_mensalidade: number | string | null
 
   indice_reajuste: string | null
   regra_reajuste: string | null
@@ -87,6 +96,8 @@ export default async function EditarContratoPage({
       data_fim,
       valor_mensal,
       dia_vencimento,
+      data_primeiro_vencimento,
+      valor_primeira_mensalidade,
       indice_reajuste,
       regra_reajuste,
       data_proximo_reajuste,
@@ -116,7 +127,9 @@ export default async function EditarContratoPage({
    */
 
   if (error || !contrato) {
-    console.log('ERRO AO CARREGAR CONTRATO PARA EDIÇÃO')
+    console.log(
+      'ERRO AO CARREGAR CONTRATO PARA EDIÇÃO'
+    )
 
     if (error) {
       console.log('message:', error.message)
@@ -129,11 +142,9 @@ export default async function EditarContratoPage({
   }
 
   /*
-   * O Supabase pode inferir os relacionamentos
-   * aninhados como arrays no TypeScript.
-   *
-   * Como cada contrato possui um locatário e um imóvel,
-   * informamos explicitamente o formato esperado.
+   * =====================================================
+   * TIPAGEM
+   * =====================================================
    */
 
   const contratoTipado =
@@ -154,6 +165,7 @@ export default async function EditarContratoPage({
       {/* ==================================================
           CABEÇALHO
           ================================================== */}
+
       <div>
         <Link
           href={`/contratos/${contratoTipado.id}`}
@@ -170,7 +182,9 @@ export default async function EditarContratoPage({
                 Editar contrato
               </h1>
 
-              <Status status={contratoTipado.status} />
+              <Status
+                status={contratoTipado.status}
+              />
             </div>
 
             <p className="mt-2 text-slate-500">
@@ -185,6 +199,7 @@ export default async function EditarContratoPage({
       {/* ==================================================
           VÍNCULOS
           ================================================== */}
+
       <div className="grid gap-4 md:grid-cols-2">
         {/* Locatário */}
         <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -242,14 +257,16 @@ export default async function EditarContratoPage({
       {/* ==================================================
           FORMULÁRIO
           ================================================== */}
+
       <div className="rounded-xl border border-slate-200 bg-white p-8">
         <form
           action={atualizarContratoComId}
           className="space-y-8"
         >
           {/* ==================================================
-              DADOS PRINCIPAIS
+              DADOS DO CONTRATO
               ================================================== */}
+
           <div>
             <h2 className="text-lg font-semibold text-slate-900">
               Dados do contrato
@@ -314,8 +331,20 @@ export default async function EditarContratoPage({
           </div>
 
           {/* ==================================================
-              DATAS
+              PERÍODO
               ================================================== */}
+
+          <div className="border-t border-slate-200 pt-8">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Período do contrato
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Defina o início e, se houver, o término
+              previsto.
+            </p>
+          </div>
+
           <div className="grid gap-6 md:grid-cols-2">
             {/* Início */}
             <div>
@@ -358,15 +387,26 @@ export default async function EditarContratoPage({
               />
 
               <p className="mt-1 text-xs text-slate-500">
-                Pode ficar em branco para contratos sem
-                data final definida.
+                Pode ficar em branco para contratos
+                sem data final definida.
               </p>
             </div>
           </div>
 
           {/* ==================================================
-              VALOR E VENCIMENTO
+              MENSALIDADE NORMAL
               ================================================== */}
+
+          <div className="border-t border-slate-200 pt-8">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Mensalidade
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Valor e vencimento normal das mensalidades.
+            </p>
+          </div>
+
           <div className="grid gap-6 md:grid-cols-2">
             {/* Valor */}
             <div>
@@ -391,13 +431,13 @@ export default async function EditarContratoPage({
               />
             </div>
 
-            {/* Vencimento */}
+            {/* Dia */}
             <div>
               <label
                 htmlFor="dia_vencimento"
                 className="mb-2 block text-sm font-medium text-slate-700"
               >
-                Dia do vencimento
+                Dia normal do vencimento
               </label>
 
               <input
@@ -415,7 +455,116 @@ export default async function EditarContratoPage({
               />
 
               <p className="mt-1 text-xs text-slate-500">
-                Informe um dia entre 1 e 31.
+                As mensalidades seguintes respeitarão
+                este dia.
+              </p>
+            </div>
+          </div>
+
+          {/* ==================================================
+              PRIMEIRA MENSALIDADE
+              ================================================== */}
+
+          <div className="border-t border-slate-200 pt-8">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <CalendarClock size={20} />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Primeira mensalidade
+                </h2>
+
+                <p className="mt-1 text-sm leading-6 text-slate-500">
+                  Configure uma condição especial para a
+                  primeira cobrança, caso tenha sido
+                  combinada entre locador e locatário.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Primeira data */}
+              <div>
+                <label
+                  htmlFor="data_primeiro_vencimento"
+                  className="mb-2 block text-sm font-semibold text-slate-800"
+                >
+                  Vencimento da primeira mensalidade
+                </label>
+
+                <input
+                  id="data_primeiro_vencimento"
+                  type="date"
+                  name="data_primeiro_vencimento"
+                  defaultValue={
+                    contratoTipado.data_primeiro_vencimento ??
+                    ''
+                  }
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500"
+                />
+
+                <p className="mt-2 text-xs leading-5 text-slate-600">
+                  Opcional. Pode ser a própria data de
+                  início ou uma data combinada antes do
+                  primeiro vencimento normal.
+                </p>
+              </div>
+
+              {/* Primeiro valor */}
+              <div>
+                <label
+                  htmlFor="valor_primeira_mensalidade"
+                  className="mb-2 block text-sm font-semibold text-slate-800"
+                >
+                  Valor da primeira mensalidade
+                </label>
+
+                <div className="relative">
+                  <CircleDollarSign
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
+                  />
+
+                  <input
+                    id="valor_primeira_mensalidade"
+                    type="text"
+                    inputMode="decimal"
+                    name="valor_primeira_mensalidade"
+                    defaultValue={formatarDecimalParaInput(
+                      contratoTipado.valor_primeira_mensalidade
+                    )}
+                    placeholder="Ex.: 900,00"
+                    className="w-full rounded-lg border border-slate-300 bg-white py-3 pl-11 pr-4 outline-none transition focus:border-blue-500"
+                  />
+                </div>
+
+                <p className="mt-2 text-xs leading-5 text-slate-600">
+                  Opcional. Se ficar vazio, será usado
+                  o valor mensal normal.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-lg border border-blue-200 bg-white p-4">
+              <p className="text-sm font-semibold text-slate-800">
+                Exemplo
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Um contrato iniciado em 13/08/2026 com
+                vencimento normal no dia 10 teria o
+                primeiro vencimento regular em 10/09/2026.
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Se houver uma cobrança especial em
+                20/08/2026, informe essa data aqui. A partir
+                da mensalidade seguinte, o sistema volta
+                ao vencimento normal no dia 10.
               </p>
             </div>
           </div>
@@ -423,6 +572,7 @@ export default async function EditarContratoPage({
           {/* ==================================================
               REAJUSTE
               ================================================== */}
+
           <div className="border-t border-slate-200 pt-8">
             <h2 className="text-lg font-semibold text-slate-900">
               Reajuste
@@ -502,6 +652,7 @@ export default async function EditarContratoPage({
           {/* ==================================================
               MULTA E JUROS
               ================================================== */}
+
           <div className="border-t border-slate-200 pt-8">
             <h2 className="text-lg font-semibold text-slate-900">
               Multa e juros
@@ -561,6 +712,7 @@ export default async function EditarContratoPage({
           {/* ==================================================
               OBSERVAÇÕES
               ================================================== */}
+
           <div className="border-t border-slate-200 pt-8">
             <label
               htmlFor="observacoes"
@@ -584,6 +736,7 @@ export default async function EditarContratoPage({
           {/* ==================================================
               BOTÕES
               ================================================== */}
+
           <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-6">
             <Link
               href={`/contratos/${contratoTipado.id}`}

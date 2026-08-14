@@ -29,6 +29,113 @@ function dataValida(valor: string) {
   return data.toISOString().slice(0, 10) === valor
 }
 
+function formatarDataISO(
+  ano: number,
+  mes: number,
+  dia: number
+) {
+  const anoTexto = String(ano).padStart(4, '0')
+  const mesTexto = String(mes).padStart(2, '0')
+  const diaTexto = String(dia).padStart(2, '0')
+
+  return `${anoTexto}-${mesTexto}-${diaTexto}`
+}
+
+function ultimoDiaDoMes(
+  ano: number,
+  mes: number
+) {
+  return new Date(
+    Date.UTC(ano, mes, 0)
+  ).getUTCDate()
+}
+
+function criarVencimento(
+  ano: number,
+  mes: number,
+  diaVencimento: number
+) {
+  const ultimoDia = ultimoDiaDoMes(
+    ano,
+    mes
+  )
+
+  const diaReal = Math.min(
+    diaVencimento,
+    ultimoDia
+  )
+
+  return formatarDataISO(
+    ano,
+    mes,
+    diaReal
+  )
+}
+
+function calcularPrimeiroVencimentoRegular(
+  dataInicio: string,
+  diaVencimento: number
+) {
+  const [anoTexto, mesTexto] =
+    dataInicio.split('-')
+
+  const ano = Number(anoTexto)
+  const mes = Number(mesTexto)
+
+  /*
+   * Primeiro tentamos usar o mês de início
+   * do contrato.
+   *
+   * Exemplo:
+   *
+   * Início: 05/08/2026
+   * Vencimento: dia 10
+   *
+   * Primeiro vencimento:
+   * 10/08/2026
+   */
+
+  const vencimentoMesmoMes =
+    criarVencimento(
+      ano,
+      mes,
+      diaVencimento
+    )
+
+  if (
+    vencimentoMesmoMes >= dataInicio
+  ) {
+    return vencimentoMesmoMes
+  }
+
+  /*
+   * Se o vencimento daquele mês já passou,
+   * usamos o mês seguinte.
+   *
+   * Exemplo:
+   *
+   * Início: 13/08/2026
+   * Vencimento: dia 10
+   *
+   * Primeiro vencimento:
+   * 10/09/2026
+   */
+
+  let proximoAno = ano
+  let proximoMes = mes + 1
+
+  if (proximoMes > 12) {
+    proximoMes = 1
+    proximoAno += 1
+  }
+
+  return criarVencimento(
+    proximoAno,
+    proximoMes,
+    diaVencimento
+  )
+}
+
 export async function criarContrato(
   formData: FormData
 ) {
@@ -80,6 +187,23 @@ export async function criarContrato(
     formData.get('dia_vencimento') || ''
   ).trim()
 
+  /*
+   * NOVOS CAMPOS
+   */
+
+  const dataPrimeiroVencimento = String(
+    formData.get(
+      'data_primeiro_vencimento'
+    ) || ''
+  ).trim()
+
+  const valorPrimeiraMensalidadeDigitado =
+    String(
+      formData.get(
+        'valor_primeira_mensalidade'
+      ) || ''
+    ).trim()
+
   const indiceReajuste = String(
     formData.get('indice_reajuste') || ''
   ).trim()
@@ -89,15 +213,21 @@ export async function criarContrato(
   ).trim()
 
   const dataProximoReajuste = String(
-    formData.get('data_proximo_reajuste') || ''
+    formData.get(
+      'data_proximo_reajuste'
+    ) || ''
   ).trim()
 
   const percentualMultaDigitado = String(
-    formData.get('percentual_multa') || ''
+    formData.get(
+      'percentual_multa'
+    ) || ''
   ).trim()
 
   const percentualJurosDigitado = String(
-    formData.get('percentual_juros') || ''
+    formData.get(
+      'percentual_juros'
+    ) || ''
   ).trim()
 
   const observacoes = String(
@@ -106,7 +236,7 @@ export async function criarContrato(
 
   /*
    * =====================================================
-   * VALIDAÇÕES BÁSICAS
+   * NÚMERO DO CONTRATO
    * =====================================================
    */
 
@@ -115,6 +245,12 @@ export async function criarContrato(
       'O número do contrato é obrigatório.'
     )
   }
+
+  /*
+   * =====================================================
+   * TIPO
+   * =====================================================
+   */
 
   if (
     tipoContrato !== 'NOVO' &&
@@ -125,11 +261,23 @@ export async function criarContrato(
     )
   }
 
+  /*
+   * =====================================================
+   * LOCATÁRIO
+   * =====================================================
+   */
+
   if (!locatarioId) {
     throw new Error(
       'Selecione um locatário.'
     )
   }
+
+  /*
+   * =====================================================
+   * IMÓVEL
+   * =====================================================
+   */
 
   if (!imovelId) {
     throw new Error(
@@ -187,9 +335,10 @@ export async function criarContrato(
     )
   }
 
-  const valorMensal = converterDecimal(
-    valorMensalDigitado
-  )
+  const valorMensal =
+    converterDecimal(
+      valorMensalDigitado
+    )
 
   if (
     !Number.isFinite(valorMensal) ||
@@ -228,19 +377,143 @@ export async function criarContrato(
 
   /*
    * =====================================================
+   * PRIMEIRO VENCIMENTO REGULAR
+   * =====================================================
+   *
+   * Calculamos automaticamente até quando
+   * a primeira mensalidade especial pode ocorrer.
+   *
+   * Exemplo:
+   *
+   * Início: 13/08/2026
+   * Vencimento normal: dia 10
+   *
+   * Primeiro vencimento regular:
+   * 10/09/2026
+   */
+
+  const primeiroVencimentoRegular =
+    calcularPrimeiroVencimentoRegular(
+      dataInicio,
+      diaVencimento
+    )
+
+  /*
+   * =====================================================
+   * PRIMEIRO VENCIMENTO PERSONALIZADO
+   * =====================================================
+   */
+
+  if (dataPrimeiroVencimento) {
+    if (
+      !dataValida(
+        dataPrimeiroVencimento
+      )
+    ) {
+      throw new Error(
+        'Data do primeiro vencimento inválida.'
+      )
+    }
+
+    /*
+     * Não pode ser anterior ao início.
+     */
+
+    if (
+      dataPrimeiroVencimento <
+      dataInicio
+    ) {
+      throw new Error(
+        'O primeiro vencimento não pode ser anterior ao início do contrato.'
+      )
+    }
+
+    /*
+     * Também não pode ultrapassar o primeiro
+     * vencimento regular.
+     *
+     * Exemplo:
+     *
+     * Início: 13/08
+     * Dia normal: 10
+     *
+     * Limite:
+     * 10/09
+     */
+
+    if (
+      dataPrimeiroVencimento >
+      primeiroVencimentoRegular
+    ) {
+      throw new Error(
+        'O primeiro vencimento não pode ser posterior ao primeiro vencimento regular do contrato.'
+      )
+    }
+
+    /*
+     * Se existe data final, o primeiro
+     * vencimento também precisa estar dentro
+     * do período do contrato.
+     */
+
+    if (
+      dataFim &&
+      dataPrimeiroVencimento > dataFim
+    ) {
+      throw new Error(
+        'O primeiro vencimento não pode ser posterior ao término do contrato.'
+      )
+    }
+  }
+
+  /*
+   * =====================================================
+   * VALOR DA PRIMEIRA MENSALIDADE
+   * =====================================================
+   */
+
+  let valorPrimeiraMensalidade:
+    number | null = null
+
+  if (
+    valorPrimeiraMensalidadeDigitado
+  ) {
+    valorPrimeiraMensalidade =
+      converterDecimal(
+        valorPrimeiraMensalidadeDigitado
+      )
+
+    if (
+      !Number.isFinite(
+        valorPrimeiraMensalidade
+      ) ||
+      valorPrimeiraMensalidade <= 0
+    ) {
+      throw new Error(
+        'Valor da primeira mensalidade inválido.'
+      )
+    }
+  }
+
+  /*
+   * =====================================================
    * MULTA
    * =====================================================
    */
 
-  let percentualMulta: number | null = null
+  let percentualMulta:
+    number | null = null
 
   if (percentualMultaDigitado) {
-    percentualMulta = converterDecimal(
-      percentualMultaDigitado
-    )
+    percentualMulta =
+      converterDecimal(
+        percentualMultaDigitado
+      )
 
     if (
-      !Number.isFinite(percentualMulta) ||
+      !Number.isFinite(
+        percentualMulta
+      ) ||
       percentualMulta < 0
     ) {
       throw new Error(
@@ -255,15 +528,19 @@ export async function criarContrato(
    * =====================================================
    */
 
-  let percentualJuros: number | null = null
+  let percentualJuros:
+    number | null = null
 
   if (percentualJurosDigitado) {
-    percentualJuros = converterDecimal(
-      percentualJurosDigitado
-    )
+    percentualJuros =
+      converterDecimal(
+        percentualJurosDigitado
+      )
 
     if (
-      !Number.isFinite(percentualJuros) ||
+      !Number.isFinite(
+        percentualJuros
+      ) ||
       percentualJuros < 0
     ) {
       throw new Error(
@@ -278,27 +555,31 @@ export async function criarContrato(
    * =====================================================
    */
 
-  if (
-    dataProximoReajuste &&
-    !dataValida(dataProximoReajuste)
-  ) {
-    throw new Error(
-      'Data do próximo reajuste inválida.'
-    )
+  if (dataProximoReajuste) {
+    if (
+      !dataValida(
+        dataProximoReajuste
+      )
+    ) {
+      throw new Error(
+        'Data do próximo reajuste inválida.'
+      )
+    }
+
+    if (
+      dataProximoReajuste <
+      dataInicio
+    ) {
+      throw new Error(
+        'A data do próximo reajuste não pode ser anterior ao início do contrato.'
+      )
+    }
   }
 
   /*
    * =====================================================
    * CONFIRMA LOCATÁRIO
    * =====================================================
-   *
-   * Não confiamos somente no valor recebido pelo
-   * formulário.
-   *
-   * Conferimos novamente se o locatário:
-   *
-   * - pertence ao usuário
-   * - continua ativo
    */
 
   const {
@@ -312,7 +593,10 @@ export async function criarContrato(
     .eq('ativo', true)
     .single()
 
-  if (erroLocatario || !locatario) {
+  if (
+    erroLocatario ||
+    !locatario
+  ) {
     throw new Error(
       'O locatário selecionado não está disponível para este contrato.'
     )
@@ -322,15 +606,6 @@ export async function criarContrato(
    * =====================================================
    * RESERVA O IMÓVEL
    * =====================================================
-   *
-   * Aqui fazemos algo importante.
-   *
-   * O imóvel somente será atualizado se ainda estiver
-   * DISPONIVEL.
-   *
-   * Dessa forma, mesmo que a página tenha ficado aberta
-   * durante algum tempo, o servidor verifica novamente
-   * antes de criar o contrato.
    */
 
   const {
@@ -343,7 +618,10 @@ export async function criarContrato(
     })
     .eq('id', imovelId)
     .eq('usuario_id', user.id)
-    .eq('situacao', 'DISPONIVEL')
+    .eq(
+      'situacao',
+      'DISPONIVEL'
+    )
     .select('id')
 
   if (
@@ -395,17 +673,41 @@ export async function criarContrato(
     .from('contratos')
     .insert({
       usuario_id: user.id,
-      locatario_id: locatarioId,
-      imovel_id: imovelId,
 
-      numero_contrato: numeroContrato,
-      tipo_contrato: tipoContrato,
+      locatario_id:
+        locatarioId,
 
-      data_inicio: dataInicio,
-      data_fim: dataFim || null,
+      imovel_id:
+        imovelId,
 
-      valor_mensal: valorMensal,
-      dia_vencimento: diaVencimento,
+      numero_contrato:
+        numeroContrato,
+
+      tipo_contrato:
+        tipoContrato,
+
+      data_inicio:
+        dataInicio,
+
+      data_fim:
+        dataFim || null,
+
+      valor_mensal:
+        valorMensal,
+
+      dia_vencimento:
+        diaVencimento,
+
+      /*
+       * NOVOS CAMPOS
+       */
+
+      data_primeiro_vencimento:
+        dataPrimeiroVencimento ||
+        null,
+
+      valor_primeira_mensalidade:
+        valorPrimeiraMensalidade,
 
       indice_reajuste:
         indiceReajuste || null,
@@ -414,7 +716,8 @@ export async function criarContrato(
         regraReajuste || null,
 
       data_proximo_reajuste:
-        dataProximoReajuste || null,
+        dataProximoReajuste ||
+        null,
 
       percentual_multa:
         percentualMulta,
@@ -422,7 +725,8 @@ export async function criarContrato(
       percentual_juros:
         percentualJuros,
 
-      status: 'ATIVO',
+      status:
+        'ATIVO',
 
       observacoes:
         observacoes || null,
@@ -434,13 +738,12 @@ export async function criarContrato(
    * =====================================================
    * SE O CONTRATO FALHAR
    * =====================================================
-   *
-   * Como o imóvel foi marcado como ALUGADO antes,
-   * tentamos devolvê-lo para DISPONIVEL caso o INSERT
-   * do contrato não consiga ser concluído.
    */
 
-  if (erroContrato || !contratoCriado) {
+  if (
+    erroContrato ||
+    !contratoCriado
+  ) {
     console.log(
       'ERRO AO CADASTRAR CONTRATO'
     )
@@ -467,6 +770,10 @@ export async function criarContrato(
       )
     }
 
+    /*
+     * Tenta liberar novamente o imóvel.
+     */
+
     const {
       error: erroLiberarImovel,
     } = await supabase
@@ -476,7 +783,10 @@ export async function criarContrato(
       })
       .eq('id', imovelId)
       .eq('usuario_id', user.id)
-      .eq('situacao', 'ALUGADO')
+      .eq(
+        'situacao',
+        'ALUGADO'
+      )
 
     if (erroLiberarImovel) {
       console.log(
@@ -511,22 +821,16 @@ export async function criarContrato(
 
   /*
    * =====================================================
-   * ATUALIZA AS PÁGINAS
+   * ATUALIZA AS TELAS
    * =====================================================
    */
 
   revalidatePath('/contratos')
   revalidatePath('/imoveis')
-  revalidatePath(`/imoveis/${imovelId}`)
 
-  /*
-   * Por enquanto voltamos para a listagem.
-   *
-   * Quando criarmos a página de detalhes do contrato,
-   * poderemos redirecionar diretamente para:
-   *
-   * /contratos/ID_DO_CONTRATO
-   */
+  revalidatePath(
+    `/imoveis/${imovelId}`
+  )
 
   redirect('/contratos')
 }

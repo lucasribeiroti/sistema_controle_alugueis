@@ -2,6 +2,8 @@ import Link from 'next/link'
 import {
   AlertTriangle,
   ArrowLeft,
+  CalendarClock,
+  CircleDollarSign,
 } from 'lucide-react'
 import { redirect } from 'next/navigation'
 
@@ -145,7 +147,9 @@ export default async function NovoContratoPage() {
 
   return (
     <div className="space-y-8">
-      {/* Cabeçalho */}
+      {/* ==================================================
+          CABEÇALHO
+          ================================================== */}
       <div>
         <Link
           href="/contratos"
@@ -165,7 +169,10 @@ export default async function NovoContratoPage() {
         </p>
       </div>
 
-      {/* Aviso de locatários */}
+      {/* ==================================================
+          AVISOS
+          ================================================== */}
+
       {!possuiLocatarios && (
         <Aviso
           titulo="Nenhum locatário ativo disponível"
@@ -175,7 +182,6 @@ export default async function NovoContratoPage() {
         />
       )}
 
-      {/* Aviso de imóveis */}
       {!possuiImoveis && (
         <Aviso
           titulo="Nenhum imóvel disponível"
@@ -185,14 +191,31 @@ export default async function NovoContratoPage() {
         />
       )}
 
-      {/* Formulário */}
+      {/* ==================================================
+          FORMULÁRIO
+          ================================================== */}
+
       <div className="rounded-xl border border-slate-200 bg-white p-8">
         <form
           action={criarContrato}
-          className="space-y-6"
+          className="space-y-8"
         >
-          {/* Número e tipo */}
+          {/* ==================================================
+              DADOS PRINCIPAIS
+              ================================================== */}
+
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Dados do contrato
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Informe os dados principais da locação.
+            </p>
+          </div>
+
           <div className="grid gap-6 md:grid-cols-2">
+            {/* Número do contrato */}
             <div>
               <label
                 htmlFor="numero_contrato"
@@ -212,6 +235,7 @@ export default async function NovoContratoPage() {
               />
             </div>
 
+            {/* Tipo */}
             <div>
               <label
                 htmlFor="tipo_contrato"
@@ -239,7 +263,10 @@ export default async function NovoContratoPage() {
             </div>
           </div>
 
-          {/* Locatário */}
+          {/* ==================================================
+              LOCATÁRIO
+              ================================================== */}
+
           <div>
             <label
               htmlFor="locatario_id"
@@ -270,6 +297,7 @@ export default async function NovoContratoPage() {
                     value={locatario.id}
                   >
                     {locatario.nome}
+
                     {locatario.cpf_cnpj
                       ? ` - ${locatario.cpf_cnpj}`
                       : ''}
@@ -279,7 +307,10 @@ export default async function NovoContratoPage() {
             </select>
           </div>
 
-          {/* Imóvel */}
+          {/* ==================================================
+              IMÓVEL
+              ================================================== */}
+
           <div>
             <label
               htmlFor="imovel_id"
@@ -320,8 +351,23 @@ export default async function NovoContratoPage() {
             </p>
           </div>
 
-          {/* Datas */}
+          {/* ==================================================
+              PERÍODO DO CONTRATO
+              ================================================== */}
+
+          <div className="border-t border-slate-200 pt-8">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Período do contrato
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Defina o início e, se houver, o término
+              previsto do contrato.
+            </p>
+          </div>
+
           <div className="grid gap-6 md:grid-cols-2">
+            {/* Data inicial */}
             <div>
               <label
                 htmlFor="data_inicio"
@@ -340,6 +386,7 @@ export default async function NovoContratoPage() {
               />
             </div>
 
+            {/* Data final */}
             <div>
               <label
                 htmlFor="data_fim"
@@ -357,14 +404,29 @@ export default async function NovoContratoPage() {
               />
 
               <p className="mt-1 text-xs text-slate-500">
-                Pode ficar em branco para contrato sem
-                data final definida.
+                Pode ficar em branco para contratos
+                sem data final definida.
               </p>
             </div>
           </div>
 
-          {/* Valor e vencimento */}
+          {/* ==================================================
+              VALOR NORMAL
+              ================================================== */}
+
+          <div className="border-t border-slate-200 pt-8">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Mensalidade
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Configure o valor mensal e o dia normal
+              de vencimento.
+            </p>
+          </div>
+
           <div className="grid gap-6 md:grid-cols-2">
+            {/* Valor mensal */}
             <div>
               <label
                 htmlFor="valor_mensal"
@@ -385,12 +447,13 @@ export default async function NovoContratoPage() {
               />
             </div>
 
+            {/* Dia do vencimento */}
             <div>
               <label
                 htmlFor="dia_vencimento"
                 className="mb-2 block text-sm font-medium text-slate-700"
               >
-                Dia do vencimento
+                Dia normal do vencimento
               </label>
 
               <input
@@ -406,13 +469,129 @@ export default async function NovoContratoPage() {
               />
 
               <p className="mt-1 text-xs text-slate-500">
-                Informe um dia entre 1 e 31.
+                As mensalidades seguintes respeitarão
+                este dia.
               </p>
             </div>
           </div>
 
-          {/* Reajuste */}
-          <div>
+          {/* ==================================================
+              PRIMEIRA MENSALIDADE
+              ================================================== */}
+
+          <div className="border-t border-slate-200 pt-8">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <CalendarClock size={20} />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Primeira mensalidade
+                </h2>
+
+                <p className="mt-1 text-sm leading-6 text-slate-500">
+                  Use estes campos somente quando houver
+                  uma condição especial para a primeira
+                  cobrança.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Data especial */}
+              <div>
+                <label
+                  htmlFor="data_primeiro_vencimento"
+                  className="mb-2 block text-sm font-semibold text-slate-800"
+                >
+                  Vencimento da primeira mensalidade
+                </label>
+
+                <input
+                  id="data_primeiro_vencimento"
+                  type="date"
+                  name="data_primeiro_vencimento"
+                  disabled={!podeCriarContrato}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500 disabled:bg-slate-100"
+                />
+
+                <p className="mt-2 text-xs leading-5 text-slate-600">
+                  Opcional. Pode ser a própria data de
+                  início ou outra data combinada antes do
+                  primeiro vencimento normal.
+                </p>
+              </div>
+
+              {/* Valor especial */}
+              <div>
+                <label
+                  htmlFor="valor_primeira_mensalidade"
+                  className="mb-2 block text-sm font-semibold text-slate-800"
+                >
+                  Valor da primeira mensalidade
+                </label>
+
+                <div className="relative">
+                  <CircleDollarSign
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
+                  />
+
+                  <input
+                    id="valor_primeira_mensalidade"
+                    type="text"
+                    inputMode="decimal"
+                    name="valor_primeira_mensalidade"
+                    placeholder="Ex.: 900,00"
+                    disabled={!podeCriarContrato}
+                    className="w-full rounded-lg border border-slate-300 bg-white py-3 pl-11 pr-4 outline-none transition focus:border-blue-500 disabled:bg-slate-100"
+                  />
+                </div>
+
+                <p className="mt-2 text-xs leading-5 text-slate-600">
+                  Opcional. Se ficar vazio, será usado
+                  o valor mensal normal do contrato.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-lg border border-blue-200 bg-white p-4">
+              <p className="text-sm font-semibold text-slate-800">
+                Como funciona?
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Se estes campos ficarem vazios, o sistema
+                calculará automaticamente o primeiro
+                vencimento usando a data de início e o dia
+                normal do vencimento.
+              </p>
+
+              <div className="mt-3 rounded-lg bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+                <strong>Exemplo:</strong>
+                <br />
+                Início: 13/08/2026
+                <br />
+                Dia normal: 10
+                <br />
+                Primeira mensalidade especial: vazia
+                <br />
+                <strong>
+                  Resultado: primeiro vencimento em
+                  10/09/2026
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          {/* ==================================================
+              REAJUSTE
+              ================================================== */}
+
+          <div className="border-t border-slate-200 pt-8">
             <h2 className="text-lg font-semibold text-slate-900">
               Reajuste
             </h2>
@@ -424,6 +603,7 @@ export default async function NovoContratoPage() {
           </div>
 
           <div className="grid gap-6 md:grid-cols-3">
+            {/* Índice */}
             <div>
               <label
                 htmlFor="indice_reajuste"
@@ -442,6 +622,7 @@ export default async function NovoContratoPage() {
               />
             </div>
 
+            {/* Regra */}
             <div>
               <label
                 htmlFor="regra_reajuste"
@@ -460,6 +641,7 @@ export default async function NovoContratoPage() {
               />
             </div>
 
+            {/* Data */}
             <div>
               <label
                 htmlFor="data_proximo_reajuste"
@@ -478,19 +660,23 @@ export default async function NovoContratoPage() {
             </div>
           </div>
 
-          {/* Multa e juros */}
-          <div>
+          {/* ==================================================
+              MULTA E JUROS
+              ================================================== */}
+
+          <div className="border-t border-slate-200 pt-8">
             <h2 className="text-lg font-semibold text-slate-900">
-              Atrasos
+              Multa e juros
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              Configure multa e juros previstos no
-              contrato.
+              Configure os percentuais previstos em caso
+              de atraso.
             </p>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
+            {/* Multa */}
             <div>
               <label
                 htmlFor="percentual_multa"
@@ -510,6 +696,7 @@ export default async function NovoContratoPage() {
               />
             </div>
 
+            {/* Juros */}
             <div>
               <label
                 htmlFor="percentual_juros"
@@ -530,8 +717,11 @@ export default async function NovoContratoPage() {
             </div>
           </div>
 
-          {/* Observações */}
-          <div>
+          {/* ==================================================
+              OBSERVAÇÕES
+              ================================================== */}
+
+          <div className="border-t border-slate-200 pt-8">
             <label
               htmlFor="observacoes"
               className="mb-2 block text-sm font-medium text-slate-700"
@@ -542,15 +732,18 @@ export default async function NovoContratoPage() {
             <textarea
               id="observacoes"
               name="observacoes"
-              rows={4}
+              rows={5}
               placeholder="Informações adicionais sobre o contrato..."
               disabled={!podeCriarContrato}
               className="w-full resize-none rounded-lg border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500 disabled:bg-slate-100"
             />
           </div>
 
-          {/* Botões */}
-          <div className="flex justify-end gap-3 border-t border-slate-200 pt-6">
+          {/* ==================================================
+              BOTÕES
+              ================================================== */}
+
+          <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-6">
             <Link
               href="/contratos"
               className="rounded-lg border border-slate-300 px-5 py-3 font-medium text-slate-700 transition hover:bg-slate-50"

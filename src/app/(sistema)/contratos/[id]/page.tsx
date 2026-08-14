@@ -3,9 +3,10 @@ import { notFound, redirect } from 'next/navigation'
 import {
   ArrowLeft,
   Building2,
+  CalendarClock,
   CalendarDays,
-  CircleDollarSign,
   CircleCheck,
+  CircleDollarSign,
   Pencil,
   UserRound,
 } from 'lucide-react'
@@ -29,6 +30,9 @@ type ContratoDetalhes = {
 
   valor_mensal: number | string | null
   dia_vencimento: number | null
+
+  data_primeiro_vencimento: string | null
+  valor_primeira_mensalidade: number | string | null
 
   indice_reajuste: string | null
   regra_reajuste: string | null
@@ -124,6 +128,8 @@ export default async function ContratoDetalhesPage({
       data_fim,
       valor_mensal,
       dia_vencimento,
+      data_primeiro_vencimento,
+      valor_primeira_mensalidade,
       indice_reajuste,
       regra_reajuste,
       data_proximo_reajuste,
@@ -184,8 +190,9 @@ export default async function ContratoDetalhesPage({
     contratoTipado.status === 'ATIVO'
 
   /*
-   * Vincula o ID do contrato à ação de encerramento.
+   * Vincula o ID à Server Action.
    */
+
   const encerrarContratoComId =
     encerrarContrato.bind(
       null,
@@ -197,6 +204,7 @@ export default async function ContratoDetalhesPage({
       {/* ==================================================
           CABEÇALHO
           ================================================== */}
+
       <div>
         <Link
           href="/contratos"
@@ -237,6 +245,7 @@ export default async function ContratoDetalhesPage({
       {/* ==================================================
           RESUMO
           ================================================== */}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Resumo
           icone={<UserRound size={20} />}
@@ -270,7 +279,7 @@ export default async function ContratoDetalhesPage({
 
         <Resumo
           icone={<CalendarDays size={20} />}
-          titulo="Vencimento"
+          titulo="Vencimento normal"
           valor={
             contratoTipado.dia_vencimento
               ? `Dia ${contratoTipado.dia_vencimento}`
@@ -282,6 +291,7 @@ export default async function ContratoDetalhesPage({
       {/* ==================================================
           DADOS DO CONTRATO
           ================================================== */}
+
       <Secao titulo="Dados do contrato">
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           <Campo
@@ -320,7 +330,7 @@ export default async function ContratoDetalhesPage({
           />
 
           <Campo
-            titulo="Dia do vencimento"
+            titulo="Dia normal do vencimento"
             valor={
               contratoTipado.dia_vencimento
                 ? `Dia ${contratoTipado.dia_vencimento}`
@@ -344,8 +354,128 @@ export default async function ContratoDetalhesPage({
       </Secao>
 
       {/* ==================================================
+          PRIMEIRA MENSALIDADE
+          ================================================== */}
+
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-8">
+        <div className="mb-6 flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-blue-600">
+            <CalendarClock size={20} />
+          </div>
+
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Primeira mensalidade
+            </h2>
+
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              Regras utilizadas especificamente para a
+              primeira cobrança do contrato.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Data */}
+          <div className="rounded-lg border border-blue-200 bg-white p-5">
+            <p className="text-sm font-medium text-slate-500">
+              Primeiro vencimento
+            </p>
+
+            {contratoTipado.data_primeiro_vencimento ? (
+              <>
+                <p className="mt-2 text-lg font-semibold text-slate-900">
+                  {formatarData(
+                    contratoTipado.data_primeiro_vencimento
+                  )}
+                </p>
+
+                <p className="mt-2 text-xs text-slate-500">
+                  Data especial definida no contrato.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 font-semibold text-slate-900">
+                  Calculado automaticamente
+                </p>
+
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  O sistema usará a data de início e o dia
+                  normal do vencimento para determinar a
+                  primeira cobrança.
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* Valor */}
+          <div className="rounded-lg border border-blue-200 bg-white p-5">
+            <p className="text-sm font-medium text-slate-500">
+              Valor da primeira mensalidade
+            </p>
+
+            {contratoTipado.valor_primeira_mensalidade !==
+            null ? (
+              <>
+                <p className="mt-2 text-lg font-semibold text-slate-900">
+                  {formatarMoeda.format(
+                    Number(
+                      contratoTipado.valor_primeira_mensalidade
+                    )
+                  )}
+                </p>
+
+                <p className="mt-2 text-xs text-slate-500">
+                  Valor especial definido para a primeira
+                  cobrança.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 font-semibold text-slate-900">
+                  Mesmo valor da mensalidade normal
+                </p>
+
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  Será utilizado{' '}
+                  <strong>
+                    {contratoTipado.valor_mensal !== null
+                      ? formatarMoeda.format(
+                          Number(
+                            contratoTipado.valor_mensal
+                          )
+                        )
+                      : 'o valor mensal do contrato'}
+                  </strong>
+                  .
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-lg border border-blue-200 bg-white p-4">
+          <p className="text-sm font-semibold text-slate-800">
+            Depois da primeira mensalidade
+          </p>
+
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            As cobranças seguintes utilizarão o valor mensal
+            normal e vencerão no dia{' '}
+            <strong>
+              {contratoTipado.dia_vencimento ||
+                'definido no contrato'}
+            </strong>
+            .
+          </p>
+        </div>
+      </div>
+
+      {/* ==================================================
           LOCATÁRIO
           ================================================== */}
+
       <Secao titulo="Locatário">
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           <Campo
@@ -392,6 +522,7 @@ export default async function ContratoDetalhesPage({
       {/* ==================================================
           IMÓVEL
           ================================================== */}
+
       <Secao titulo="Imóvel">
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           <Campo
@@ -447,6 +578,7 @@ export default async function ContratoDetalhesPage({
       {/* ==================================================
           REAJUSTE
           ================================================== */}
+
       <Secao titulo="Reajuste">
         <div className="grid gap-8 md:grid-cols-3">
           <Campo
@@ -475,6 +607,7 @@ export default async function ContratoDetalhesPage({
       {/* ==================================================
           MULTA E JUROS
           ================================================== */}
+
       <Secao titulo="Multa e juros">
         <div className="grid gap-8 md:grid-cols-2">
           <Campo
@@ -496,6 +629,7 @@ export default async function ContratoDetalhesPage({
       {/* ==================================================
           OBSERVAÇÕES
           ================================================== */}
+
       <Secao titulo="Observações">
         <Campo
           titulo="Observações do contrato"
@@ -506,6 +640,7 @@ export default async function ContratoDetalhesPage({
       {/* ==================================================
           DOCUMENTO
           ================================================== */}
+
       <Secao titulo="Documento do contrato">
         {contratoTipado.arquivo_contrato ? (
           <p className="text-sm text-slate-700">
@@ -521,6 +656,7 @@ export default async function ContratoDetalhesPage({
       {/* ==================================================
           ENCERRAR CONTRATO
           ================================================== */}
+
       {contratoAtivo && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-8">
           <div className="max-w-2xl">
@@ -580,6 +716,7 @@ export default async function ContratoDetalhesPage({
       {/* ==================================================
           CONTRATO ENCERRADO
           ================================================== */}
+
       {contratoTipado.status === 'ENCERRADO' && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6">
           <div className="flex items-start gap-3">
