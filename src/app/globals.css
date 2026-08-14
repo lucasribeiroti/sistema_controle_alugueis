@@ -24,3 +24,27 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* =====================================================
+   CAMPOS DE FORMULÁRIO
+   ===================================================== */
+
+/* Texto digitado */
+input,
+textarea,
+select {
+  color: #0f172a !important;
+  border-color: #94a3b8;
+}
+
+/* Texto sugestivo / placeholder */
+input::placeholder,
+textarea::placeholder {
+  color: #475569 !important;
+  opacity: 1;
+}
+
+/* Títulos dos campos */
+label {
+  color: #1e293b;
+}
