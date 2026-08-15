@@ -6,27 +6,36 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
 function converterDecimal(valor: string) {
-  const valorNormalizado = valor.includes(',')
-    ? valor
-        .replace(/\./g, '')
-        .replace(',', '.')
-    : valor
+  const valorNormalizado =
+    valor.includes(',')
+      ? valor
+          .replace(/\./g, '')
+          .replace(',', '.')
+      : valor
 
   return Number(valorNormalizado)
 }
 
 function dataValida(valor: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(valor)
+  ) {
     return false
   }
 
-  const data = new Date(`${valor}T00:00:00Z`)
+  const data =
+    new Date(`${valor}T00:00:00Z`)
 
-  if (Number.isNaN(data.getTime())) {
+  if (
+    Number.isNaN(data.getTime())
+  ) {
     return false
   }
 
-  return data.toISOString().slice(0, 10) === valor
+  return (
+    data.toISOString().slice(0, 10) ===
+    valor
+  )
 }
 
 function formatarDataISO(
@@ -34,9 +43,14 @@ function formatarDataISO(
   mes: number,
   dia: number
 ) {
-  const anoTexto = String(ano).padStart(4, '0')
-  const mesTexto = String(mes).padStart(2, '0')
-  const diaTexto = String(dia).padStart(2, '0')
+  const anoTexto =
+    String(ano).padStart(4, '0')
+
+  const mesTexto =
+    String(mes).padStart(2, '0')
+
+  const diaTexto =
+    String(dia).padStart(2, '0')
 
   return `${anoTexto}-${mesTexto}-${diaTexto}`
 }
@@ -46,7 +60,11 @@ function ultimoDiaDoMes(
   mes: number
 ) {
   return new Date(
-    Date.UTC(ano, mes, 0)
+    Date.UTC(
+      ano,
+      mes,
+      0
+    )
   ).getUTCDate()
 }
 
@@ -55,15 +73,17 @@ function criarVencimento(
   mes: number,
   diaVencimento: number
 ) {
-  const ultimoDia = ultimoDiaDoMes(
-    ano,
-    mes
-  )
+  const ultimoDia =
+    ultimoDiaDoMes(
+      ano,
+      mes
+    )
 
-  const diaReal = Math.min(
-    diaVencimento,
-    ultimoDia
-  )
+  const diaReal =
+    Math.min(
+      diaVencimento,
+      ultimoDia
+    )
 
   return formatarDataISO(
     ano,
@@ -76,11 +96,16 @@ function calcularPrimeiroVencimentoRegular(
   dataInicio: string,
   diaVencimento: number
 ) {
-  const [anoTexto, mesTexto] =
-    dataInicio.split('-')
+  const [
+    anoTexto,
+    mesTexto,
+  ] = dataInicio.split('-')
 
-  const ano = Number(anoTexto)
-  const mes = Number(mesTexto)
+  const ano =
+    Number(anoTexto)
+
+  const mes =
+    Number(mesTexto)
 
   const vencimentoMesmoMes =
     criarVencimento(
@@ -90,15 +115,21 @@ function calcularPrimeiroVencimentoRegular(
     )
 
   if (
-    vencimentoMesmoMes >= dataInicio
+    vencimentoMesmoMes >=
+    dataInicio
   ) {
     return vencimentoMesmoMes
   }
 
-  let proximoAno = ano
-  let proximoMes = mes + 1
+  let proximoAno =
+    ano
 
-  if (proximoMes > 12) {
+  let proximoMes =
+    mes + 1
+
+  if (
+    proximoMes > 12
+  ) {
     proximoMes = 1
     proximoAno += 1
   }
@@ -110,59 +141,78 @@ function calcularPrimeiroVencimentoRegular(
   )
 }
 
+/*
+ * =====================================================
+ * ATUALIZAR CONTRATO
+ * =====================================================
+ */
+
 export async function atualizarContrato(
   id: string,
   formData: FormData
 ) {
-  const supabase = await createClient()
+  const supabase =
+    await createClient()
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: {
+      user,
+    },
+  } =
+    await supabase.auth.getUser()
 
   if (!user) {
     redirect('/login')
   }
 
-  /*
-   * =====================================================
-   * DADOS DO FORMULÁRIO
-   * =====================================================
-   */
+  const numeroContrato =
+    String(
+      formData.get(
+        'numero_contrato'
+      ) || ''
+    ).trim()
 
-  const numeroContrato = String(
-    formData.get('numero_contrato') || ''
-  ).trim()
+  const tipoContrato =
+    String(
+      formData.get(
+        'tipo_contrato'
+      ) || ''
+    ).trim()
 
-  const tipoContrato = String(
-    formData.get('tipo_contrato') || ''
-  ).trim()
+  const dataInicio =
+    String(
+      formData.get(
+        'data_inicio'
+      ) || ''
+    ).trim()
 
-  const dataInicio = String(
-    formData.get('data_inicio') || ''
-  ).trim()
+  const dataFim =
+    String(
+      formData.get(
+        'data_fim'
+      ) || ''
+    ).trim()
 
-  const dataFim = String(
-    formData.get('data_fim') || ''
-  ).trim()
+  const valorMensalDigitado =
+    String(
+      formData.get(
+        'valor_mensal'
+      ) || ''
+    ).trim()
 
-  const valorMensalDigitado = String(
-    formData.get('valor_mensal') || ''
-  ).trim()
+  const diaVencimentoDigitado =
+    String(
+      formData.get(
+        'dia_vencimento'
+      ) || ''
+    ).trim()
 
-  const diaVencimentoDigitado = String(
-    formData.get('dia_vencimento') || ''
-  ).trim()
-
-  /*
-   * PRIMEIRA MENSALIDADE
-   */
-
-  const dataPrimeiroVencimento = String(
-    formData.get(
-      'data_primeiro_vencimento'
-    ) || ''
-  ).trim()
+  const dataPrimeiroVencimento =
+    String(
+      formData.get(
+        'data_primeiro_vencimento'
+      ) || ''
+    ).trim()
 
   const valorPrimeiraMensalidadeDigitado =
     String(
@@ -171,69 +221,51 @@ export async function atualizarContrato(
       ) || ''
     ).trim()
 
-  const indiceReajuste = String(
-    formData.get('indice_reajuste') || ''
-  ).trim()
+  const indiceReajuste =
+    String(
+      formData.get(
+        'indice_reajuste'
+      ) || ''
+    ).trim()
 
-  const regraReajuste = String(
-    formData.get('regra_reajuste') || ''
-  ).trim()
+  const regraReajuste =
+    String(
+      formData.get(
+        'regra_reajuste'
+      ) || ''
+    ).trim()
 
-  const dataProximoReajuste = String(
-    formData.get(
-      'data_proximo_reajuste'
-    ) || ''
-  ).trim()
+  const dataProximoReajuste =
+    String(
+      formData.get(
+        'data_proximo_reajuste'
+      ) || ''
+    ).trim()
 
-  const percentualMultaDigitado = String(
-    formData.get(
-      'percentual_multa'
-    ) || ''
-  ).trim()
+  const percentualMultaDigitado =
+    String(
+      formData.get(
+        'percentual_multa'
+      ) || ''
+    ).trim()
 
-  const percentualJurosDigitado = String(
-    formData.get(
-      'percentual_juros'
-    ) || ''
-  ).trim()
+  const percentualJurosDigitado =
+    String(
+      formData.get(
+        'percentual_juros'
+      ) || ''
+    ).trim()
 
-  const observacoes = String(
-    formData.get('observacoes') || ''
-  ).trim()
-
-  /*
-   * =====================================================
-   * CONFIRMA SE O CONTRATO EXISTE
-   * =====================================================
-   */
-
-  const {
-    data: contratoAtual,
-    error: erroContratoAtual,
-  } = await supabase
-    .from('contratos')
-    .select(`
-      id,
-      status,
-      locatario_id,
-      imovel_id
-    `)
-    .eq('id', id)
-    .eq('usuario_id', user.id)
-    .single()
-
-  if (
-    erroContratoAtual ||
-    !contratoAtual
-  ) {
-    throw new Error(
-      'Contrato não encontrado.'
-    )
-  }
+  const observacoes =
+    String(
+      formData.get(
+        'observacoes'
+      ) || ''
+    ).trim()
 
   /*
    * =====================================================
-   * NÚMERO
+   * NÚMERO DO CONTRATO
    * =====================================================
    */
 
@@ -250,8 +282,8 @@ export async function atualizarContrato(
    */
 
   if (
-    tipoContrato !== 'NOVO' &&
-    tipoContrato !== 'ANTIGO'
+    tipoContrato !== 'ANTIGO' &&
+    tipoContrato !== 'NOVO'
   ) {
     throw new Error(
       'Tipo de contrato inválido.'
@@ -270,7 +302,11 @@ export async function atualizarContrato(
     )
   }
 
-  if (!dataValida(dataInicio)) {
+  if (
+    !dataValida(
+      dataInicio
+    )
+  ) {
     throw new Error(
       'Data de início inválida.'
     )
@@ -278,22 +314,26 @@ export async function atualizarContrato(
 
   /*
    * =====================================================
-   * DATA DE TÉRMINO
+   * DATA FINAL
    * =====================================================
    */
 
-  if (dataFim) {
-    if (!dataValida(dataFim)) {
-      throw new Error(
-        'Data de término inválida.'
-      )
-    }
+  if (
+    dataFim &&
+    !dataValida(dataFim)
+  ) {
+    throw new Error(
+      'Data final inválida.'
+    )
+  }
 
-    if (dataFim < dataInicio) {
-      throw new Error(
-        'A data de término não pode ser anterior à data de início.'
-      )
-    }
+  if (
+    dataFim &&
+    dataFim < dataInicio
+  ) {
+    throw new Error(
+      'A data final não pode ser anterior à data de início.'
+    )
   }
 
   /*
@@ -314,7 +354,9 @@ export async function atualizarContrato(
     )
 
   if (
-    !Number.isFinite(valorMensal) ||
+    !Number.isFinite(
+      valorMensal
+    ) ||
     valorMensal <= 0
   ) {
     throw new Error(
@@ -334,12 +376,15 @@ export async function atualizarContrato(
     )
   }
 
-  const diaVencimento = Number(
-    diaVencimentoDigitado
-  )
+  const diaVencimento =
+    Number(
+      diaVencimentoDigitado
+    )
 
   if (
-    !Number.isInteger(diaVencimento) ||
+    !Number.isInteger(
+      diaVencimento
+    ) ||
     diaVencimento < 1 ||
     diaVencimento > 31
   ) {
@@ -362,47 +407,53 @@ export async function atualizarContrato(
 
   /*
    * =====================================================
-   * PRIMEIRO VENCIMENTO PERSONALIZADO
+   * PRIMEIRO VENCIMENTO ESPECIAL
    * =====================================================
    */
 
-  if (dataPrimeiroVencimento) {
-    if (
-      !dataValida(
-        dataPrimeiroVencimento
-      )
-    ) {
-      throw new Error(
-        'Data do primeiro vencimento inválida.'
-      )
-    }
+  if (
+    dataPrimeiroVencimento &&
+    !dataValida(
+      dataPrimeiroVencimento
+    )
+  ) {
+    throw new Error(
+      'O vencimento da primeira mensalidade é inválido.'
+    )
+  }
 
-    if (
-      dataPrimeiroVencimento <
+  if (
+    dataPrimeiroVencimento &&
+    dataPrimeiroVencimento <
       dataInicio
-    ) {
-      throw new Error(
-        'O primeiro vencimento não pode ser anterior ao início do contrato.'
-      )
-    }
+  ) {
+    throw new Error(
+      'O vencimento da primeira mensalidade não pode ser anterior ao início do contrato.'
+    )
+  }
 
-    if (
-      dataPrimeiroVencimento >
+  if (
+    dataPrimeiroVencimento &&
+    dataPrimeiroVencimento >
       primeiroVencimentoRegular
-    ) {
-      throw new Error(
-        'O primeiro vencimento não pode ser posterior ao primeiro vencimento regular do contrato.'
-      )
-    }
+  ) {
+    throw new Error(
+      `O vencimento especial da primeira mensalidade não pode ser posterior a ${primeiroVencimentoRegular
+        .split('-')
+        .reverse()
+        .join('/')}.`
+    )
+  }
 
-    if (
-      dataFim &&
-      dataPrimeiroVencimento > dataFim
-    ) {
-      throw new Error(
-        'O primeiro vencimento não pode ser posterior ao término do contrato.'
-      )
-    }
+  if (
+    dataFim &&
+    dataPrimeiroVencimento &&
+    dataPrimeiroVencimento >
+      dataFim
+  ) {
+    throw new Error(
+      'O vencimento da primeira mensalidade não pode ser posterior ao término do contrato.'
+    )
   }
 
   /*
@@ -429,21 +480,40 @@ export async function atualizarContrato(
       valorPrimeiraMensalidade <= 0
     ) {
       throw new Error(
-        'Valor da primeira mensalidade inválido.'
+        'O valor da primeira mensalidade deve ser maior que zero.'
       )
     }
   }
 
   /*
    * =====================================================
-   * MULTA
+   * DATA DO PRÓXIMO REAJUSTE
    * =====================================================
    */
 
-  let percentualMulta:
-    number | null = null
+  if (
+    dataProximoReajuste &&
+    !dataValida(
+      dataProximoReajuste
+    )
+  ) {
+    throw new Error(
+      'Data do próximo reajuste inválida.'
+    )
+  }
 
-  if (percentualMultaDigitado) {
+  /*
+   * =====================================================
+   * PERCENTUAL DE MULTA
+   * =====================================================
+   */
+
+  let percentualMulta =
+    0
+
+  if (
+    percentualMultaDigitado
+  ) {
     percentualMulta =
       converterDecimal(
         percentualMultaDigitado
@@ -463,14 +533,16 @@ export async function atualizarContrato(
 
   /*
    * =====================================================
-   * JUROS
+   * PERCENTUAL DE JUROS
    * =====================================================
    */
 
-  let percentualJuros:
-    number | null = null
+  let percentualJuros =
+    0
 
-  if (percentualJurosDigitado) {
+  if (
+    percentualJurosDigitado
+  ) {
     percentualJuros =
       converterDecimal(
         percentualJurosDigitado
@@ -490,101 +562,66 @@ export async function atualizarContrato(
 
   /*
    * =====================================================
-   * PRÓXIMO REAJUSTE
+   * RPC TRANSACIONAL
    * =====================================================
-   */
-
-  if (dataProximoReajuste) {
-    if (
-      !dataValida(
-        dataProximoReajuste
-      )
-    ) {
-      throw new Error(
-        'Data do próximo reajuste inválida.'
-      )
-    }
-
-    if (
-      dataProximoReajuste <
-      dataInicio
-    ) {
-      throw new Error(
-        'A data do próximo reajuste não pode ser anterior ao início do contrato.'
-      )
-    }
-  }
-
-  /*
-   * =====================================================
-   * ATUALIZA O CONTRATO
-   * =====================================================
-   *
-   * Não alteramos aqui:
-   *
-   * locatario_id
-   * imovel_id
-   * status
    */
 
   const {
-    data: contratoAtualizado,
-    error: erroAtualizacao,
-  } = await supabase
-    .from('contratos')
-    .update({
-      numero_contrato:
+    error,
+  } = await supabase.rpc(
+    'editar_contrato_e_sincronizar_mensalidades',
+    {
+      p_contrato_id:
+        id,
+
+      p_numero_contrato:
         numeroContrato,
 
-      tipo_contrato:
+      p_tipo_contrato:
         tipoContrato,
 
-      data_inicio:
+      p_data_inicio:
         dataInicio,
 
-      data_fim:
+      p_data_fim:
         dataFim || null,
 
-      valor_mensal:
+      p_valor_mensal:
         valorMensal,
 
-      dia_vencimento:
+      p_dia_vencimento:
         diaVencimento,
 
-      /*
-       * PRIMEIRA MENSALIDADE
-       */
-
-      data_primeiro_vencimento:
+      p_data_primeiro_vencimento:
         dataPrimeiroVencimento ||
         null,
 
-      valor_primeira_mensalidade:
+      p_valor_primeira_mensalidade:
         valorPrimeiraMensalidade,
 
-      indice_reajuste:
-        indiceReajuste || null,
+      p_indice_reajuste:
+        indiceReajuste ||
+        null,
 
-      regra_reajuste:
-        regraReajuste || null,
+      p_regra_reajuste:
+        regraReajuste ||
+        null,
 
-      data_proximo_reajuste:
+      p_data_proximo_reajuste:
         dataProximoReajuste ||
         null,
 
-      percentual_multa:
+      p_percentual_multa:
         percentualMulta,
 
-      percentual_juros:
+      p_percentual_juros:
         percentualJuros,
 
-      observacoes:
-        observacoes || null,
-    })
-    .eq('id', id)
-    .eq('usuario_id', user.id)
-    .select('id')
-    .single()
+      p_observacoes:
+        observacoes ||
+        null,
+    }
+  )
 
   /*
    * =====================================================
@@ -592,48 +629,46 @@ export async function atualizarContrato(
    * =====================================================
    */
 
-  if (
-    erroAtualizacao ||
-    !contratoAtualizado
-  ) {
+  if (error) {
     console.log(
-      'ERRO AO ATUALIZAR CONTRATO'
+      'ERRO AO EDITAR CONTRATO E SINCRONIZAR MENSALIDADES'
     )
 
-    if (erroAtualizacao) {
-      console.log(
-        'message:',
-        erroAtualizacao.message
-      )
+    console.log(
+      'message:',
+      error.message
+    )
 
-      console.log(
-        'code:',
-        erroAtualizacao.code
-      )
+    console.log(
+      'code:',
+      error.code
+    )
 
-      console.log(
-        'details:',
-        erroAtualizacao.details
-      )
+    console.log(
+      'details:',
+      error.details
+    )
 
-      console.log(
-        'hint:',
-        erroAtualizacao.hint
-      )
-    }
+    console.log(
+      'hint:',
+      error.hint
+    )
 
     throw new Error(
-      'Não foi possível atualizar o contrato.'
+      error.message ||
+        'Não foi possível atualizar o contrato.'
     )
   }
 
   /*
    * =====================================================
-   * ATUALIZA AS TELAS
+   * REVALIDAÇÃO
    * =====================================================
    */
 
-  revalidatePath('/contratos')
+  revalidatePath(
+    '/contratos'
+  )
 
   revalidatePath(
     `/contratos/${id}`
@@ -643,11 +678,19 @@ export async function atualizarContrato(
     `/contratos/${id}/editar`
   )
 
-  revalidatePath('/alugueis')
+  revalidatePath(
+    '/alugueis'
+  )
 
   revalidatePath(
     '/alugueis/gerar'
   )
+
+  /*
+   * =====================================================
+   * REDIRECIONAMENTO
+   * =====================================================
+   */
 
   redirect(
     `/contratos/${id}`

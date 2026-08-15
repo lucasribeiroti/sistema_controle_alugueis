@@ -3,85 +3,114 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
+import {
+  arredondarMoeda,
+  calcularEncargosAtraso,
+  obterDataHojeBrasil,
+} from '@/lib/alugueis'
+
 import { createClient } from '@/lib/supabase/server'
 
-function converterDecimal(valor: string) {
-  const valorNormalizado = valor.includes(',')
-    ? valor
-        .replace(/\./g, '')
-        .replace(',', '.')
-    : valor
+type MensalidadePagamentoServidor = {
+  id: string
+  contrato_id: string
 
-  return Number(valorNormalizado)
-}
+  vencimento: string
+  valor_previsto: number | string
 
-function dataValida(valor: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
-    return false
-  }
+  situacao: string
 
-  const data = new Date(`${valor}T00:00:00Z`)
+  contratos: {
+    percentual_multa:
+      | number
+      | string
+      | null
 
-  if (Number.isNaN(data.getTime())) {
-    return false
-  }
-
-  return data.toISOString().slice(0, 10) === valor
+    percentual_juros:
+      | number
+      | string
+      | null
+  } | null
 }
 
 /*
  * =====================================================
- * DATA ATUAL NO BRASIL
+ * CONVERTE VALOR DECIMAL
  * =====================================================
  *
- * Usamos o fuso de São Paulo para evitar que
- * o servidor interprete "hoje" de acordo com
- * outro fuso horário.
+ * Aceita:
+ *
+ * 1500
+ * 1500.50
+ * 1500,50
+ * 1.500,50
  */
 
-function obterDataHojeBrasil() {
-  const partes = new Intl.DateTimeFormat(
-    'pt-BR',
-    {
-      timeZone: 'America/Sao_Paulo',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }
-  ).formatToParts(new Date())
+function converterDecimal(
+  valor: string
+) {
+  const valorNormalizado =
+    valor.includes(',')
+      ? valor
+          .replace(/\./g, '')
+          .replace(',', '.')
+      : valor
 
-  const ano = partes.find(
-    (parte) => parte.type === 'year'
-  )?.value
+  return Number(
+    valorNormalizado
+  )
+}
 
-  const mes = partes.find(
-    (parte) => parte.type === 'month'
-  )?.value
+/*
+ * =====================================================
+ * VALIDA DATA
+ * =====================================================
+ */
 
-  const dia = partes.find(
-    (parte) => parte.type === 'day'
-  )?.value
-
-  if (!ano || !mes || !dia) {
-    throw new Error(
-      'Não foi possível determinar a data atual.'
+function dataValida(
+  valor: string
+) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      valor
     )
+  ) {
+    return false
   }
 
-  return `${ano}-${mes}-${dia}`
+  const data =
+    new Date(
+      `${valor}T00:00:00Z`
+    )
+
+  if (
+    Number.isNaN(
+      data.getTime()
+    )
+  ) {
+    return false
+  }
+
+  return (
+    data
+      .toISOString()
+      .slice(0, 10) ===
+    valor
+  )
 }
 
-function arredondarMoeda(valor: number) {
-  return Math.round(
-    (valor + Number.EPSILON) * 100
-  ) / 100
-}
+/*
+ * =====================================================
+ * REGISTRAR PAGAMENTO
+ * =====================================================
+ */
 
 export async function registrarPagamento(
   id: string,
   formData: FormData
 ) {
-  const supabase = await createClient()
+  const supabase =
+    await createClient()
 
   /*
    * =====================================================
@@ -91,13 +120,15 @@ export async function registrarPagamento(
 
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } =
+    await supabase.auth.getUser()
 
   if (!user) {
     redirect('/login')
   }
 
-  const usuarioId = user.id
+  const usuarioId =
+    user.id
 
   /*
    * =====================================================
@@ -105,25 +136,40 @@ export async function registrarPagamento(
    * =====================================================
    */
 
-  const dataPagamento = String(
-    formData.get('data_pagamento') || ''
-  ).trim()
+  const dataPagamento =
+    String(
+      formData.get(
+        'data_pagamento'
+      ) || ''
+    ).trim()
 
-  const valorPagoDigitado = String(
-    formData.get('valor_pago') || ''
-  ).trim()
+  const valorPagoDigitado =
+    String(
+      formData.get(
+        'valor_pago'
+      ) || ''
+    ).trim()
 
-  const multaDigitada = String(
-    formData.get('multa') || ''
-  ).trim()
+  const multaDigitada =
+    String(
+      formData.get(
+        'multa'
+      ) || ''
+    ).trim()
 
-  const jurosDigitados = String(
-    formData.get('juros') || ''
-  ).trim()
+  const jurosDigitados =
+    String(
+      formData.get(
+        'juros'
+      ) || ''
+    ).trim()
 
-  const descontoDigitado = String(
-    formData.get('desconto') || ''
-  ).trim()
+  const descontoDigitado =
+    String(
+      formData.get(
+        'desconto'
+      ) || ''
+    ).trim()
 
   /*
    * =====================================================
@@ -137,7 +183,11 @@ export async function registrarPagamento(
     )
   }
 
-  if (!dataValida(dataPagamento)) {
+  if (
+    !dataValida(
+      dataPagamento
+    )
+  ) {
     throw new Error(
       'Data de pagamento inválida.'
     )
@@ -167,7 +217,9 @@ export async function registrarPagamento(
    * =====================================================
    */
 
-  if (!valorPagoDigitado) {
+  if (
+    !valorPagoDigitado
+  ) {
     throw new Error(
       'O valor pago é obrigatório.'
     )
@@ -179,7 +231,9 @@ export async function registrarPagamento(
     )
 
   if (
-    !Number.isFinite(valorPago) ||
+    !Number.isFinite(
+      valorPago
+    ) ||
     valorPago <= 0
   ) {
     throw new Error(
@@ -189,21 +243,34 @@ export async function registrarPagamento(
 
   /*
    * =====================================================
-   * MULTA
+   * MULTA INFORMADA MANUALMENTE
    * =====================================================
+   *
+   * null significa:
+   *
+   * o usuário deixou o campo vazio
+   * e o sistema deverá calcular
+   * automaticamente.
+   *
+   * Se o usuário digitar 0,00,
+   * isso é considerado uma alteração
+   * manual válida.
    */
 
-  let multa = 0
+  let multaInformada:
+    number | null = null
 
   if (multaDigitada) {
-    multa =
+    multaInformada =
       converterDecimal(
         multaDigitada
       )
 
     if (
-      !Number.isFinite(multa) ||
-      multa < 0
+      !Number.isFinite(
+        multaInformada
+      ) ||
+      multaInformada < 0
     ) {
       throw new Error(
         'Valor da multa inválido.'
@@ -213,21 +280,24 @@ export async function registrarPagamento(
 
   /*
    * =====================================================
-   * JUROS
+   * JUROS INFORMADOS MANUALMENTE
    * =====================================================
    */
 
-  let juros = 0
+  let jurosInformados:
+    number | null = null
 
   if (jurosDigitados) {
-    juros =
+    jurosInformados =
       converterDecimal(
         jurosDigitados
       )
 
     if (
-      !Number.isFinite(juros) ||
-      juros < 0
+      !Number.isFinite(
+        jurosInformados
+      ) ||
+      jurosInformados < 0
     ) {
       throw new Error(
         'Valor dos juros inválido.'
@@ -239,18 +309,25 @@ export async function registrarPagamento(
    * =====================================================
    * DESCONTO
    * =====================================================
+   *
+   * Desconto continua sendo informado
+   * manualmente.
    */
 
   let desconto = 0
 
-  if (descontoDigitado) {
+  if (
+    descontoDigitado
+  ) {
     desconto =
       converterDecimal(
         descontoDigitado
       )
 
     if (
-      !Number.isFinite(desconto) ||
+      !Number.isFinite(
+        desconto
+      ) ||
       desconto < 0
     ) {
       throw new Error(
@@ -261,8 +338,14 @@ export async function registrarPagamento(
 
   /*
    * =====================================================
-   * BUSCA A MENSALIDADE
+   * BUSCA A MENSALIDADE + CONTRATO
    * =====================================================
+   *
+   * Agora também buscamos:
+   *
+   * vencimento
+   * percentual_multa
+   * percentual_juros
    */
 
   const {
@@ -273,15 +356,29 @@ export async function registrarPagamento(
     .select(`
       id,
       contrato_id,
+      vencimento,
       valor_previsto,
-      situacao
+      situacao,
+      contratos (
+        percentual_multa,
+        percentual_juros
+      )
     `)
-    .eq('id', id)
+    .eq(
+      'id',
+      id
+    )
     .eq(
       'usuario_id',
       usuarioId
     )
     .single()
+
+  /*
+   * =====================================================
+   * NÃO ENCONTRADO
+   * =====================================================
+   */
 
   if (
     erroMensalidade ||
@@ -291,7 +388,9 @@ export async function registrarPagamento(
       'ERRO AO BUSCAR MENSALIDADE PARA PAGAMENTO'
     )
 
-    if (erroMensalidade) {
+    if (
+      erroMensalidade
+    ) {
       console.log(
         'message:',
         erroMensalidade.message
@@ -320,12 +419,22 @@ export async function registrarPagamento(
 
   /*
    * =====================================================
+   * TIPAGEM
+   * =====================================================
+   */
+
+  const mensalidadeTipada =
+    mensalidade as unknown as
+      MensalidadePagamentoServidor
+
+  /*
+   * =====================================================
    * SITUAÇÃO
    * =====================================================
    */
 
   if (
-    mensalidade.situacao ===
+    mensalidadeTipada.situacao ===
     'PAGO'
   ) {
     throw new Error(
@@ -334,7 +443,7 @@ export async function registrarPagamento(
   }
 
   if (
-    mensalidade.situacao ===
+    mensalidadeTipada.situacao ===
     'CANCELADO'
   ) {
     throw new Error(
@@ -350,19 +459,105 @@ export async function registrarPagamento(
 
   const valorPrevisto =
     Number(
-      mensalidade.valor_previsto
+      mensalidadeTipada.valor_previsto
     )
 
   if (
     !Number.isFinite(
       valorPrevisto
     ) ||
-    valorPrevisto < 0
+    valorPrevisto <= 0
   ) {
     throw new Error(
       'A mensalidade possui um valor previsto inválido.'
     )
   }
+
+  /*
+   * =====================================================
+   * PERCENTUAIS DO CONTRATO
+   * =====================================================
+   */
+
+  const percentualMulta =
+    mensalidadeTipada
+      .contratos
+      ?.percentual_multa ??
+    0
+
+  const percentualJuros =
+    mensalidadeTipada
+      .contratos
+      ?.percentual_juros ??
+    0
+
+  /*
+   * =====================================================
+   * CÁLCULO AUTOMÁTICO
+   * =====================================================
+   *
+   * Aqui usamos a função central criada
+   * em src/lib/alugueis.ts.
+   */
+
+  const encargosAutomaticos =
+    calcularEncargosAtraso({
+      valorPrevisto,
+
+      percentualMulta,
+
+      percentualJuros,
+
+      vencimento:
+        mensalidadeTipada.vencimento,
+
+      dataPagamento,
+    })
+
+  /*
+   * =====================================================
+   * MULTA FINAL
+   * =====================================================
+   *
+   * Se o usuário deixou o campo vazio:
+   *
+   * usamos a multa automática.
+   *
+   * Se informou algum valor:
+   *
+   * respeitamos o valor manual.
+   */
+
+  const multa =
+    multaInformada !== null
+      ? arredondarMoeda(
+          multaInformada
+        )
+      : encargosAutomaticos.multa
+
+  /*
+   * =====================================================
+   * JUROS FINAIS
+   * =====================================================
+   */
+
+  const juros =
+    jurosInformados !== null
+      ? arredondarMoeda(
+          jurosInformados
+        )
+      : encargosAutomaticos.juros
+
+  /*
+   * =====================================================
+   * DESCONTO FINAL
+   * =====================================================
+   */
+
+  desconto =
+    arredondarMoeda(
+      desconto
+    )
 
   /*
    * =====================================================
@@ -378,7 +573,9 @@ export async function registrarPagamento(
         desconto
     )
 
-  if (totalCalculado <= 0) {
+  if (
+    totalCalculado <= 0
+  ) {
     throw new Error(
       'O total da mensalidade deve ser maior que zero.'
     )
@@ -388,17 +585,25 @@ export async function registrarPagamento(
    * =====================================================
    * CONFERE O VALOR PAGO
    * =====================================================
+   *
+   * Por enquanto, não trabalhamos
+   * com pagamento parcial.
    */
+
+  const valorPagoArredondado =
+    arredondarMoeda(
+      valorPago
+    )
 
   const diferenca =
     Math.abs(
-      arredondarMoeda(
-        valorPago
-      ) -
+      valorPagoArredondado -
         totalCalculado
     )
 
-  if (diferenca > 0.01) {
+  if (
+    diferenca > 0.01
+  ) {
     throw new Error(
       `O valor pago deve ser igual ao total da cobrança: R$ ${totalCalculado.toLocaleString(
         'pt-BR',
@@ -426,50 +631,46 @@ export async function registrarPagamento(
         dataPagamento,
 
       valor_pago:
-        arredondarMoeda(
-          valorPago
-        ),
+        valorPagoArredondado,
 
-      multa:
-        arredondarMoeda(
-          multa
-        ),
+      multa,
 
-      juros:
-        arredondarMoeda(
-          juros
-        ),
+      juros,
 
-      desconto:
-        arredondarMoeda(
-          desconto
-        ),
+      desconto,
 
       situacao:
         'PAGO',
     })
     .eq(
       'id',
-      mensalidade.id
+      mensalidadeTipada.id
     )
     .eq(
       'usuario_id',
       usuarioId
     )
+    /*
+     * Protege contra uma alteração
+     * concorrente da mensalidade.
+     */
     .eq(
       'situacao',
-      mensalidade.situacao
+      mensalidadeTipada.situacao
     )
     .select(`
       id,
       situacao,
-      valor_pago
+      valor_pago,
+      multa,
+      juros,
+      desconto
     `)
     .single()
 
   /*
    * =====================================================
-   * ERRO NO PAGAMENTO
+   * ERRO AO REGISTRAR
    * =====================================================
    */
 
@@ -481,7 +682,9 @@ export async function registrarPagamento(
       'ERRO AO REGISTRAR PAGAMENTO'
     )
 
-    if (erroPagamento) {
+    if (
+      erroPagamento
+    ) {
       console.log(
         'message:',
         erroPagamento.message
@@ -510,6 +713,51 @@ export async function registrarPagamento(
 
   /*
    * =====================================================
+   * LOG DE DESENVOLVIMENTO
+   * =====================================================
+   */
+
+  console.log(
+    'PAGAMENTO REGISTRADO'
+  )
+
+  console.log(
+    'Dias de atraso:',
+    encargosAutomaticos.diasAtraso
+  )
+
+  console.log(
+    'Multa automática:',
+    encargosAutomaticos.multa
+  )
+
+  console.log(
+    'Juros automáticos:',
+    encargosAutomaticos.juros
+  )
+
+  console.log(
+    'Multa aplicada:',
+    multa
+  )
+
+  console.log(
+    'Juros aplicados:',
+    juros
+  )
+
+  console.log(
+    'Desconto:',
+    desconto
+  )
+
+  console.log(
+    'Total pago:',
+    valorPagoArredondado
+  )
+
+  /*
+   * =====================================================
    * ATUALIZA AS TELAS
    * =====================================================
    */
@@ -520,6 +768,10 @@ export async function registrarPagamento(
 
   revalidatePath(
     `/alugueis/${id}`
+  )
+
+  revalidatePath(
+    `/alugueis/${id}/pagamento`
   )
 
   redirect(

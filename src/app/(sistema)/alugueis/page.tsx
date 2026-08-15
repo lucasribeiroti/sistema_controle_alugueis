@@ -8,6 +8,8 @@ import {
 } from 'lucide-react'
 
 import {
+  calcularEncargosAtraso,
+  obterDataHojeBrasil,
   obterSituacaoEfetiva,
   traduzirSituacaoAluguel,
   type SituacaoAluguel,
@@ -36,6 +38,16 @@ type AluguelLista = {
     id: string
     numero_contrato: string | null
 
+    percentual_multa:
+      | number
+      | string
+      | null
+
+    percentual_juros:
+      | number
+      | string
+      | null
+
     locatarios: {
       nome: string
     } | null
@@ -46,13 +58,24 @@ type AluguelLista = {
   } | null
 }
 
-const formatarMoeda = new Intl.NumberFormat(
-  'pt-BR',
-  {
-    style: 'currency',
-    currency: 'BRL',
-  }
-)
+type SituacaoExibicao =
+  | SituacaoAluguel
+  | 'PAGO_ATRASADO'
+
+const formatarMoeda =
+  new Intl.NumberFormat(
+    'pt-BR',
+    {
+      style: 'currency',
+      currency: 'BRL',
+    }
+  )
+
+/*
+ * =====================================================
+ * FORMATA DATA
+ * =====================================================
+ */
 
 function formatarData(
   data: string | null
@@ -78,6 +101,12 @@ function formatarData(
   return `${dia}/${mes}/${ano}`
 }
 
+/*
+ * =====================================================
+ * FORMATA COMPETÊNCIA
+ * =====================================================
+ */
+
 function formatarCompetencia(
   competencia: string | null
 ) {
@@ -100,26 +129,214 @@ function formatarCompetencia(
   return `${mes}/${ano}`
 }
 
+/*
+ * =====================================================
+ * FORMATA VALOR
+ * =====================================================
+ */
+
 function formatarValor(
   valor: number | string | null
 ) {
-  if (valor === null) {
-    return 'Não informado'
-  }
-
   const numero =
-    Number(valor)
+    Number(valor ?? 0)
 
   if (
     !Number.isFinite(numero)
   ) {
-    return 'Não informado'
+    return formatarMoeda.format(0)
   }
 
   return formatarMoeda.format(
     numero
   )
 }
+
+/*
+ * =====================================================
+ * SITUAÇÃO PARA EXIBIÇÃO
+ * =====================================================
+ */
+
+function obterSituacaoExibicao(
+  aluguel: AluguelLista
+): SituacaoExibicao {
+  const situacaoEfetiva =
+    obterSituacaoEfetiva(
+      aluguel.situacao,
+      aluguel.vencimento
+    )
+
+  /*
+   * PAGO EM ATRASO
+   *
+   * Se a data do pagamento foi posterior
+   * ao vencimento, mostramos uma situação
+   * específica para o usuário.
+   */
+
+  if (
+    situacaoEfetiva === 'PAGO' &&
+    aluguel.data_pagamento &&
+    aluguel.data_pagamento >
+      aluguel.vencimento
+  ) {
+    return 'PAGO_ATRASADO'
+  }
+
+  return situacaoEfetiva
+}
+
+/*
+ * =====================================================
+ * TEXTO DA SITUAÇÃO
+ * =====================================================
+ */
+
+function traduzirSituacaoExibicao(
+  situacao: SituacaoExibicao
+) {
+  if (
+    situacao ===
+    'PAGO_ATRASADO'
+  ) {
+    return 'Pago em atraso'
+  }
+
+  return traduzirSituacaoAluguel(
+    situacao
+  )
+}
+
+/*
+ * =====================================================
+ * ENCARGOS PARA EXIBIÇÃO
+ * =====================================================
+ *
+ * Esta função decide o que mostrar nas colunas
+ * MULTA e JUROS.
+ *
+ * PAGO:
+ * usa os valores realmente gravados no pagamento.
+ *
+ * ATRASADO:
+ * calcula multa e juros até a data de hoje.
+ *
+ * ABERTO:
+ * mostra zero.
+ *
+ * CANCELADO:
+ * mostra os valores armazenados, normalmente zero.
+ */
+
+function obterEncargosExibicao(
+  aluguel: AluguelLista,
+  situacaoEfetiva: SituacaoAluguel,
+  dataHoje: string
+) {
+  /*
+   * =====================================================
+   * MENSALIDADE PAGA
+   * =====================================================
+   *
+   * O pagamento já aconteceu.
+   *
+   * Portanto, multa e juros não devem continuar
+   * crescendo. Mostramos os valores finais que
+   * foram registrados.
+   */
+
+  if (
+    situacaoEfetiva === 'PAGO'
+  ) {
+    return {
+      multa:
+        Number(
+          aluguel.multa ?? 0
+        ),
+
+      juros:
+        Number(
+          aluguel.juros ?? 0
+        ),
+
+      dinamico: false,
+    }
+  }
+
+  /*
+   * =====================================================
+   * MENSALIDADE ATRASADA
+   * =====================================================
+   *
+   * Aqui os encargos ainda são provisórios.
+   *
+   * Eles são recalculados até HOJE.
+   */
+
+  if (
+    situacaoEfetiva ===
+    'ATRASADO'
+  ) {
+    const valorPrevisto =
+      Number(
+        aluguel.valor_previsto
+      )
+
+    const percentualMulta =
+      aluguel.contratos
+        ?.percentual_multa ??
+      0
+
+    const percentualJuros =
+      aluguel.contratos
+        ?.percentual_juros ??
+      0
+
+    const calculo =
+      calcularEncargosAtraso({
+        valorPrevisto,
+
+        percentualMulta,
+
+        percentualJuros,
+
+        vencimento:
+          aluguel.vencimento,
+
+        dataPagamento:
+          dataHoje,
+      })
+
+    return {
+      multa:
+        calculo.multa,
+
+      juros:
+        calculo.juros,
+
+      dinamico: true,
+    }
+  }
+
+  /*
+   * =====================================================
+   * ABERTO OU CANCELADO
+   * =====================================================
+   */
+
+  return {
+    multa: 0,
+    juros: 0,
+    dinamico: false,
+  }
+}
+
+/*
+ * =====================================================
+ * PÁGINA
+ * =====================================================
+ */
 
 export default async function AlugueisPage() {
   const supabase =
@@ -132,7 +349,9 @@ export default async function AlugueisPage() {
    */
 
   const {
-    data: { user },
+    data: {
+      user,
+    },
   } =
     await supabase.auth.getUser()
 
@@ -142,8 +361,27 @@ export default async function AlugueisPage() {
 
   /*
    * =====================================================
+   * DATA ATUAL
+   * =====================================================
+   *
+   * Esta data será usada para calcular os encargos
+   * atuais das mensalidades atrasadas.
+   */
+
+  const dataHoje =
+    obterDataHojeBrasil()
+
+  /*
+   * =====================================================
    * BUSCA AS MENSALIDADES
    * =====================================================
+   *
+   * Agora buscamos também:
+   *
+   * percentual_multa
+   * percentual_juros
+   *
+   * do contrato.
    */
 
   const {
@@ -165,6 +403,8 @@ export default async function AlugueisPage() {
       contratos (
         id,
         numero_contrato,
+        percentual_multa,
+        percentual_juros,
         locatarios (
           nome
         ),
@@ -237,12 +477,6 @@ export default async function AlugueisPage() {
    * =====================================================
    * CONTADORES
    * =====================================================
-   *
-   * Aqui usamos a situação EFETIVA.
-   *
-   * Portanto, uma mensalidade que está
-   * ABERTO no banco pode ser contada como
-   * ATRASADO se o vencimento já passou.
    */
 
   const resumo =
@@ -338,19 +572,25 @@ export default async function AlugueisPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Resumo
             titulo="Abertos"
-            valor={resumo.abertos}
+            valor={
+              resumo.abertos
+            }
             tipo="ABERTO"
           />
 
           <Resumo
             titulo="Atrasados"
-            valor={resumo.atrasados}
+            valor={
+              resumo.atrasados
+            }
             tipo="ATRASADO"
           />
 
           <Resumo
             titulo="Pagos"
-            valor={resumo.pagos}
+            valor={
+              resumo.pagos
+            }
             tipo="PAGO"
           />
 
@@ -389,14 +629,12 @@ export default async function AlugueisPage() {
             </div>
 
             <h2 className="text-lg font-semibold text-slate-900">
-              Nenhuma mensalidade
-              encontrada
+              Nenhuma mensalidade encontrada
             </h2>
 
             <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-              Gere as mensalidades de
-              um contrato para começar
-              a acompanhar os
+              Gere as mensalidades de um contrato
+              para começar a acompanhar os
               vencimentos e pagamentos.
             </p>
 
@@ -448,6 +686,14 @@ export default async function AlugueisPage() {
                   </Cabecalho>
 
                   <Cabecalho>
+                    Multa
+                  </Cabecalho>
+
+                  <Cabecalho>
+                    Juros
+                  </Cabecalho>
+
+                  <Cabecalho>
                     Situação
                   </Cabecalho>
                 </tr>
@@ -468,6 +714,38 @@ export default async function AlugueisPage() {
                         aluguel.vencimento
                       )
 
+                    /*
+                     * ========================================
+                     * SITUAÇÃO VISUAL
+                     * ========================================
+                     */
+
+                    const situacaoExibicao =
+                      obterSituacaoExibicao(
+                        aluguel
+                      )
+
+                    /*
+                     * ========================================
+                     * MULTA E JUROS
+                     * ========================================
+                     *
+                     * Para atrasados:
+                     *
+                     * cálculo até HOJE.
+                     *
+                     * Para pagos:
+                     *
+                     * valores finais gravados.
+                     */
+
+                    const encargos =
+                      obterEncargosExibicao(
+                        aluguel,
+                        situacaoEfetiva,
+                        dataHoje
+                      )
+
                     return (
                       <tr
                         key={
@@ -475,7 +753,7 @@ export default async function AlugueisPage() {
                         }
                         className="transition hover:bg-slate-50"
                       >
-                        {/* Competência */}
+                        {/* COMPETÊNCIA */}
 
                         <Celula>
                           <Link
@@ -488,7 +766,7 @@ export default async function AlugueisPage() {
                           </Link>
                         </Celula>
 
-                        {/* Vencimento */}
+                        {/* VENCIMENTO */}
 
                         <Celula>
                           <div className="flex items-center gap-2">
@@ -517,7 +795,7 @@ export default async function AlugueisPage() {
                           </div>
                         </Celula>
 
-                        {/* Contrato */}
+                        {/* CONTRATO */}
 
                         <Celula>
                           {aluguel
@@ -542,7 +820,7 @@ export default async function AlugueisPage() {
                           )}
                         </Celula>
 
-                        {/* Locatário */}
+                        {/* LOCATÁRIO */}
 
                         <Celula>
                           {aluguel
@@ -552,7 +830,7 @@ export default async function AlugueisPage() {
                             'Não informado'}
                         </Celula>
 
-                        {/* Imóvel */}
+                        {/* IMÓVEL */}
 
                         <Celula>
                           {aluguel
@@ -562,7 +840,7 @@ export default async function AlugueisPage() {
                             'Não informado'}
                         </Celula>
 
-                        {/* Valor */}
+                        {/* VALOR */}
 
                         <Celula>
                           <div className="flex items-center gap-2 font-medium text-slate-900">
@@ -577,12 +855,38 @@ export default async function AlugueisPage() {
                           </div>
                         </Celula>
 
-                        {/* Situação */}
+                        {/* MULTA */}
+
+                        <Celula>
+                          <ValorEncargo
+                            valor={
+                              encargos.multa
+                            }
+                            dinamico={
+                              encargos.dinamico
+                            }
+                          />
+                        </Celula>
+
+                        {/* JUROS */}
+
+                        <Celula>
+                          <ValorEncargo
+                            valor={
+                              encargos.juros
+                            }
+                            dinamico={
+                              encargos.dinamico
+                            }
+                          />
+                        </Celula>
+
+                        {/* SITUAÇÃO */}
 
                         <Celula>
                           <Situacao
                             situacao={
-                              situacaoEfetiva
+                              situacaoExibicao
                             }
                           />
                         </Celula>
@@ -597,21 +901,23 @@ export default async function AlugueisPage() {
       )}
 
       {/* ==================================================
-          EXPLICAÇÃO DO ATRASO
+          EXPLICAÇÃO
           ================================================== */}
 
       {possuiAlugueis && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
           <p className="text-sm font-semibold text-slate-700">
-            Situação das mensalidades
+            Multa, juros e situação
           </p>
 
           <p className="mt-1 text-sm leading-6 text-slate-500">
-            Uma mensalidade não paga
-            passa a ser exibida como
-            atrasada automaticamente a
-            partir do dia seguinte ao
-            vencimento.
+            Para mensalidades atrasadas e ainda não
+            pagas, multa e juros representam o valor
+            atualizado até hoje. Os juros são
+            recalculados conforme os dias de atraso.
+            Após o pagamento, os valores exibidos passam
+            a ser os encargos efetivamente registrados
+            naquele pagamento.
           </p>
         </div>
       )}
@@ -621,7 +927,43 @@ export default async function AlugueisPage() {
 
 /*
  * =====================================================
- * CABEÇALHO DA TABELA
+ * VALOR DO ENCARGO
+ * =====================================================
+ */
+
+function ValorEncargo({
+  valor,
+  dinamico,
+}: {
+  valor: number
+  dinamico: boolean
+}) {
+  return (
+    <div>
+      <span
+        className={
+          valor > 0
+            ? 'font-semibold text-orange-700'
+            : 'text-slate-600'
+        }
+      >
+        {formatarMoeda.format(
+          valor
+        )}
+      </span>
+
+      {dinamico && (
+        <p className="mt-1 text-[11px] font-medium text-orange-600">
+          atualizado hoje
+        </p>
+      )}
+    </div>
+  )
+}
+
+/*
+ * =====================================================
+ * CABEÇALHO
  * =====================================================
  */
 
@@ -741,10 +1083,10 @@ function Resumo({
 function Situacao({
   situacao,
 }: {
-  situacao: SituacaoAluguel
+  situacao: SituacaoExibicao
 }) {
   const texto =
-    traduzirSituacaoAluguel(
+    traduzirSituacaoExibicao(
       situacao
     )
 
@@ -753,6 +1095,17 @@ function Situacao({
   ) {
     return (
       <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+        {texto}
+      </span>
+    )
+  }
+
+  if (
+    situacao ===
+    'PAGO_ATRASADO'
+  ) {
+    return (
+      <span className="inline-flex rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
         {texto}
       </span>
     )
@@ -769,7 +1122,8 @@ function Situacao({
   }
 
   if (
-    situacao === 'CANCELADO'
+    situacao ===
+    'CANCELADO'
   ) {
     return (
       <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">

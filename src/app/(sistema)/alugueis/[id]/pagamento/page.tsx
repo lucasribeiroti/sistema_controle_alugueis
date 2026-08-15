@@ -5,11 +5,11 @@ import {
   CalendarDays,
   CircleDollarSign,
   CreditCard,
-  Info,
   TriangleAlert,
 } from 'lucide-react'
 
 import {
+  obterDataHojeBrasil,
   obterSituacaoEfetiva,
   traduzirSituacaoAluguel,
   type SituacaoAluguel,
@@ -17,6 +17,7 @@ import {
 
 import { createClient } from '@/lib/supabase/server'
 import { registrarPagamento } from './actions'
+import PagamentoForm from './PagamentoForm'
 
 type Props = {
   params: Promise<{
@@ -45,6 +46,16 @@ type MensalidadePagamento = {
     id: string
     numero_contrato: string | null
 
+    percentual_multa:
+      | number
+      | string
+      | null
+
+    percentual_juros:
+      | number
+      | string
+      | null
+
     locatarios: {
       nome: string
     } | null
@@ -55,13 +66,20 @@ type MensalidadePagamento = {
   } | null
 }
 
-const formatarMoeda = new Intl.NumberFormat(
-  'pt-BR',
-  {
-    style: 'currency',
-    currency: 'BRL',
-  }
-)
+const formatarMoeda =
+  new Intl.NumberFormat(
+    'pt-BR',
+    {
+      style: 'currency',
+      currency: 'BRL',
+    }
+  )
+
+/*
+ * =====================================================
+ * FORMATA DATA
+ * =====================================================
+ */
 
 function formatarData(
   data: string | null
@@ -70,15 +88,28 @@ function formatarData(
     return 'Não informado'
   }
 
-  const [ano, mes, dia] =
-    data.split('-')
+  const [
+    ano,
+    mes,
+    dia,
+  ] = data.split('-')
 
-  if (!ano || !mes || !dia) {
+  if (
+    !ano ||
+    !mes ||
+    !dia
+  ) {
     return data
   }
 
   return `${dia}/${mes}/${ano}`
 }
+
+/*
+ * =====================================================
+ * FORMATA COMPETÊNCIA
+ * =====================================================
+ */
 
 function formatarCompetencia(
   competencia: string | null
@@ -87,42 +118,33 @@ function formatarCompetencia(
     return 'Não informado'
   }
 
-  const [ano, mes] =
-    competencia.split('-')
+  const [
+    ano,
+    mes,
+  ] = competencia.split('-')
 
-  if (!ano || !mes) {
+  if (
+    !ano ||
+    !mes
+  ) {
     return competencia
   }
 
   return `${mes}/${ano}`
 }
 
-function formatarDecimalParaInput(
-  valor: number | string | null
-) {
-  if (valor === null) {
-    return ''
-  }
-
-  const numero = Number(valor)
-
-  if (!Number.isFinite(numero)) {
-    return ''
-  }
-
-  return numero.toLocaleString(
-    'pt-BR',
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }
-  )
-}
+/*
+ * =====================================================
+ * PÁGINA
+ * =====================================================
+ */
 
 export default async function RegistrarPagamentoPage({
   params,
 }: Props) {
-  const { id } = await params
+  const {
+    id,
+  } = await params
 
   const supabase =
     await createClient()
@@ -134,7 +156,9 @@ export default async function RegistrarPagamentoPage({
    */
 
   const {
-    data: { user },
+    data: {
+      user,
+    },
   } =
     await supabase.auth.getUser()
 
@@ -146,6 +170,14 @@ export default async function RegistrarPagamentoPage({
    * =====================================================
    * BUSCA A MENSALIDADE
    * =====================================================
+   *
+   * Agora também buscamos:
+   *
+   * percentual_multa
+   * percentual_juros
+   *
+   * porque o formulário precisa deles para
+   * calcular os encargos automaticamente.
    */
 
   const {
@@ -167,6 +199,8 @@ export default async function RegistrarPagamentoPage({
       contratos (
         id,
         numero_contrato,
+        percentual_multa,
+        percentual_juros,
         locatarios (
           nome
         ),
@@ -231,7 +265,8 @@ export default async function RegistrarPagamentoPage({
    */
 
   const mensalidadeTipada =
-    mensalidade as unknown as MensalidadePagamento
+    mensalidade as unknown as
+      MensalidadePagamento
 
   /*
    * =====================================================
@@ -246,9 +281,8 @@ export default async function RegistrarPagamentoPage({
     )
 
   /*
-   * =====================================================
-   * NÃO PERMITE PAGAR NOVAMENTE
-   * =====================================================
+   * Mensalidades já pagas não podem
+   * receber outro pagamento.
    */
 
   if (
@@ -261,9 +295,8 @@ export default async function RegistrarPagamentoPage({
   }
 
   /*
-   * =====================================================
-   * NÃO PERMITE PAGAR CANCELADA
-   * =====================================================
+   * Mensalidades canceladas também
+   * não podem receber pagamento.
    */
 
   if (
@@ -274,12 +307,6 @@ export default async function RegistrarPagamentoPage({
       `/alugueis/${mensalidadeTipada.id}`
     )
   }
-
-  /*
-   * =====================================================
-   * VERIFICA SE ESTÁ ATRASADA
-   * =====================================================
-   */
 
   const mensalidadeAtrasada =
     situacaoEfetiva ===
@@ -308,26 +335,64 @@ export default async function RegistrarPagamentoPage({
       mensalidadeTipada.valor_previsto
     )
 
-  const multaAtual =
+  if (
+    !Number.isFinite(
+      valorPrevisto
+    )
+  ) {
+    throw new Error(
+      'A mensalidade possui um valor previsto inválido.'
+    )
+  }
+
+  const multaInicial =
     Number(
-      mensalidadeTipada.multa ?? 0
+      mensalidadeTipada.multa ??
+        0
     )
 
-  const jurosAtuais =
+  const jurosIniciais =
     Number(
-      mensalidadeTipada.juros ?? 0
+      mensalidadeTipada.juros ??
+        0
     )
 
-  const descontoAtual =
+  const descontoInicial =
     Number(
-      mensalidadeTipada.desconto ?? 0
+      mensalidadeTipada.desconto ??
+        0
     )
 
-  const totalAtual =
-    valorPrevisto +
-    multaAtual +
-    jurosAtuais -
-    descontoAtual
+  /*
+   * =====================================================
+   * REGRAS DO CONTRATO
+   * =====================================================
+   */
+
+  const percentualMulta =
+    mensalidadeTipada
+      .contratos
+      ?.percentual_multa ??
+    0
+
+  const percentualJuros =
+    mensalidadeTipada
+      .contratos
+      ?.percentual_juros ??
+    0
+
+  /*
+   * =====================================================
+   * DATA ATUAL
+   * =====================================================
+   *
+   * O Client Component recebe a mesma
+   * referência de "hoje" usada pelo
+   * restante do sistema.
+   */
+
+  const dataHoje =
+    obterDataHojeBrasil()
 
   return (
     <div className="space-y-8">
@@ -340,7 +405,9 @@ export default async function RegistrarPagamentoPage({
           href={`/alugueis/${mensalidadeTipada.id}`}
           className="mb-4 inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-900"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft
+            size={16}
+          />
 
           Voltar para a mensalidade
         </Link>
@@ -360,7 +427,8 @@ export default async function RegistrarPagamentoPage({
             </div>
 
             <p className="mt-2 text-slate-500">
-              Registre o recebimento da mensalidade{' '}
+              Registre o recebimento da
+              mensalidade{' '}
               {formatarCompetencia(
                 mensalidadeTipada.competencia
               )}
@@ -388,18 +456,23 @@ export default async function RegistrarPagamentoPage({
               </p>
 
               <p className="mt-1 text-sm leading-6 text-red-800">
-                Esta mensalidade venceu em{' '}
+                Esta mensalidade venceu
+                em{' '}
                 <strong>
                   {formatarData(
                     mensalidadeTipada.vencimento
                   )}
                 </strong>{' '}
-                e ainda não possui pagamento registrado.
+                e ainda não possui
+                pagamento registrado.
               </p>
 
               <p className="mt-2 text-sm leading-6 text-red-800">
-                Confira se devem ser aplicados multa ou
-                juros antes de confirmar o recebimento.
+                A multa e os juros serão
+                calculados automaticamente
+                de acordo com a data do
+                pagamento e as regras do
+                contrato.
               </p>
             </div>
           </div>
@@ -445,9 +518,11 @@ export default async function RegistrarPagamentoPage({
             />
           }
           titulo="Valor previsto"
-          valor={formatarMoeda.format(
-            valorPrevisto
-          )}
+          valor={
+            formatarMoeda.format(
+              valorPrevisto
+            )
+          }
         />
 
         <Resumo
@@ -516,290 +591,47 @@ export default async function RegistrarPagamentoPage({
       </div>
 
       {/* ==================================================
-          INFORMAÇÃO
-          ================================================== */}
-
-      <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
-        <div className="flex items-start gap-3">
-          <Info
-            size={20}
-            className="mt-0.5 shrink-0 text-blue-700"
-          />
-
-          <div>
-            <p className="font-semibold text-blue-900">
-              Como informar o pagamento
-            </p>
-
-            <p className="mt-1 text-sm leading-6 text-blue-800">
-              Multa, juros e desconto devem ser
-              informados em reais. O valor pago deve
-              corresponder ao total final da cobrança.
-            </p>
-
-            <p className="mt-2 text-sm leading-6 text-blue-800">
-              Nesta versão, uma mensalidade é considerada
-              totalmente quitada. Pagamentos parciais ainda
-              não fazem parte do fluxo.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* ==================================================
-          FORMULÁRIO
+          FORMULÁRIO INTERATIVO
           ================================================== */}
 
       <div className="rounded-xl border border-slate-200 bg-white p-8">
-        <form
+        <PagamentoForm
           action={
             registrarPagamentoComId
           }
-          className="space-y-8"
-        >
-          {/* ==============================================
-              PAGAMENTO
-              ============================================== */}
 
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">
-              Pagamento
-            </h2>
+          valorPrevisto={
+            valorPrevisto
+          }
 
-            <p className="mt-1 text-sm text-slate-500">
-              Informe quando e quanto foi recebido.
-            </p>
-          </div>
+          vencimento={
+            mensalidadeTipada.vencimento
+          }
 
-          {/* ==============================================
-              DATA DO PAGAMENTO
-              ============================================== */}
+          percentualMulta={
+            percentualMulta
+          }
 
-          <div>
-            <label
-              htmlFor="data_pagamento"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              Data do pagamento
-            </label>
+          percentualJuros={
+            percentualJuros
+          }
 
-            <input
-              id="data_pagamento"
-              type="date"
-              name="data_pagamento"
-              required
-              className="w-full max-w-md rounded-lg border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
-            />
+          dataHoje={
+            dataHoje
+          }
 
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-              Não é permitido registrar uma data de
-              pagamento futura.
-            </p>
-          </div>
+          multaInicial={
+            multaInicial
+          }
 
-          {/* ==============================================
-              COMPOSIÇÃO
-              ============================================== */}
+          jurosIniciais={
+            jurosIniciais
+          }
 
-          <div className="border-t border-slate-200 pt-8">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Composição da cobrança
-            </h2>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Informe somente os valores adicionais
-              realmente aplicados.
-            </p>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-3">
-            {/* ============================================
-                MULTA
-                ============================================ */}
-
-            <div>
-              <label
-                htmlFor="multa"
-                className="mb-2 block text-sm font-medium text-slate-700"
-              >
-                Multa
-              </label>
-
-              <input
-                id="multa"
-                type="text"
-                inputMode="decimal"
-                name="multa"
-                defaultValue={
-                  multaAtual > 0
-                    ? formatarDecimalParaInput(
-                        multaAtual
-                      )
-                    : ''
-                }
-                placeholder="Ex.: 30,00"
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
-              />
-
-              <p className="mt-1 text-xs text-slate-500">
-                Valor em reais.
-              </p>
-            </div>
-
-            {/* ============================================
-                JUROS
-                ============================================ */}
-
-            <div>
-              <label
-                htmlFor="juros"
-                className="mb-2 block text-sm font-medium text-slate-700"
-              >
-                Juros
-              </label>
-
-              <input
-                id="juros"
-                type="text"
-                inputMode="decimal"
-                name="juros"
-                defaultValue={
-                  jurosAtuais > 0
-                    ? formatarDecimalParaInput(
-                        jurosAtuais
-                      )
-                    : ''
-                }
-                placeholder="Ex.: 10,00"
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
-              />
-
-              <p className="mt-1 text-xs text-slate-500">
-                Valor em reais.
-              </p>
-            </div>
-
-            {/* ============================================
-                DESCONTO
-                ============================================ */}
-
-            <div>
-              <label
-                htmlFor="desconto"
-                className="mb-2 block text-sm font-medium text-slate-700"
-              >
-                Desconto
-              </label>
-
-              <input
-                id="desconto"
-                type="text"
-                inputMode="decimal"
-                name="desconto"
-                defaultValue={
-                  descontoAtual > 0
-                    ? formatarDecimalParaInput(
-                        descontoAtual
-                      )
-                    : ''
-                }
-                placeholder="Ex.: 100,00"
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
-              />
-
-              <p className="mt-1 text-xs text-slate-500">
-                Valor em reais.
-              </p>
-            </div>
-          </div>
-
-          {/* ==============================================
-              TOTAL ATUAL
-              ============================================== */}
-
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-slate-500">
-                  Total atual
-                </p>
-
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  Valor previsto + multa + juros -
-                  desconto.
-                </p>
-              </div>
-
-              <p className="text-2xl font-bold text-slate-900">
-                {formatarMoeda.format(
-                  totalAtual
-                )}
-              </p>
-            </div>
-
-            <p className="mt-4 text-xs leading-5 text-slate-500">
-              O valor acima considera o que já estiver
-              salvo na mensalidade. Se você informar
-              multa, juros ou desconto agora, ajuste o
-              valor pago para corresponder ao novo total.
-            </p>
-          </div>
-
-          {/* ==============================================
-              VALOR PAGO
-              ============================================== */}
-
-          <div>
-            <label
-              htmlFor="valor_pago"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              Valor pago
-            </label>
-
-            <input
-              id="valor_pago"
-              type="text"
-              inputMode="decimal"
-              name="valor_pago"
-              required
-              defaultValue={formatarDecimalParaInput(
-                totalAtual
-              )}
-              placeholder="Ex.: 1500,00"
-              className="w-full max-w-md rounded-lg border border-slate-300 px-4 py-3 text-lg font-semibold outline-none transition focus:border-blue-500"
-            />
-
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-              O valor pago deve ser igual ao valor
-              previsto + multa + juros - desconto.
-            </p>
-          </div>
-
-          {/* ==============================================
-              BOTÕES
-              ============================================== */}
-
-          <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-6">
-            <Link
-              href={`/alugueis/${mensalidadeTipada.id}`}
-              className="rounded-lg border border-slate-300 px-5 py-3 font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Cancelar
-            </Link>
-
-            <button
-              type="submit"
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 font-semibold text-white transition hover:bg-emerald-700"
-            >
-              <CreditCard
-                size={18}
-              />
-
-              Confirmar pagamento
-            </button>
-          </div>
-        </form>
+          descontoInicial={
+            descontoInicial
+          }
+        />
       </div>
     </div>
   )
