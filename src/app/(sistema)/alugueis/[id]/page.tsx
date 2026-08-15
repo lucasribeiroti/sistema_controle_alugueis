@@ -7,8 +7,15 @@ import {
   CircleDollarSign,
   CreditCard,
   FileText,
+  TriangleAlert,
   UserRound,
 } from 'lucide-react'
+
+import {
+  obterSituacaoEfetiva,
+  traduzirSituacaoAluguel,
+  type SituacaoAluguel,
+} from '@/lib/alugueis'
 
 import { createClient } from '@/lib/supabase/server'
 
@@ -59,17 +66,23 @@ type AluguelDetalhes = {
   } | null
 }
 
-const formatarMoeda = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-})
+const formatarMoeda = new Intl.NumberFormat(
+  'pt-BR',
+  {
+    style: 'currency',
+    currency: 'BRL',
+  }
+)
 
-function formatarData(data: string | null) {
+function formatarData(
+  data: string | null
+) {
   if (!data) {
     return 'Não informado'
   }
 
-  const [ano, mes, dia] = data.split('-')
+  const [ano, mes, dia] =
+    data.split('-')
 
   if (!ano || !mes || !dia) {
     return data
@@ -85,7 +98,8 @@ function formatarCompetencia(
     return 'Não informado'
   }
 
-  const [ano, mes] = competencia.split('-')
+  const [ano, mes] =
+    competencia.split('-')
 
   if (!ano || !mes) {
     return competencia
@@ -107,7 +121,9 @@ function formatarValor(
     return 'Não informado'
   }
 
-  return formatarMoeda.format(numero)
+  return formatarMoeda.format(
+    numero
+  )
 }
 
 export default async function AluguelDetalhesPage({
@@ -115,11 +131,19 @@ export default async function AluguelDetalhesPage({
 }: Props) {
   const { id } = await params
 
-  const supabase = await createClient()
+  const supabase =
+    await createClient()
+
+  /*
+   * =====================================================
+   * AUTENTICAÇÃO
+   * =====================================================
+   */
 
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } =
+    await supabase.auth.getUser()
 
   if (!user) {
     redirect('/login')
@@ -131,7 +155,10 @@ export default async function AluguelDetalhesPage({
    * =====================================================
    */
 
-  const { data: aluguel, error } = await supabase
+  const {
+    data: aluguel,
+    error,
+  } = await supabase
     .from('alugueis')
     .select(`
       id,
@@ -164,8 +191,14 @@ export default async function AluguelDetalhesPage({
         )
       )
     `)
-    .eq('id', id)
-    .eq('usuario_id', user.id)
+    .eq(
+      'id',
+      id
+    )
+    .eq(
+      'usuario_id',
+      user.id
+    )
     .single()
 
   /*
@@ -174,16 +207,34 @@ export default async function AluguelDetalhesPage({
    * =====================================================
    */
 
-  if (error || !aluguel) {
+  if (
+    error ||
+    !aluguel
+  ) {
     console.log(
       'ERRO AO CARREGAR MENSALIDADE'
     )
 
     if (error) {
-      console.log('message:', error.message)
-      console.log('code:', error.code)
-      console.log('details:', error.details)
-      console.log('hint:', error.hint)
+      console.log(
+        'message:',
+        error.message
+      )
+
+      console.log(
+        'code:',
+        error.code
+      )
+
+      console.log(
+        'details:',
+        error.details
+      )
+
+      console.log(
+        'hint:',
+        error.hint
+      )
     }
 
     notFound()
@@ -198,33 +249,63 @@ export default async function AluguelDetalhesPage({
   const aluguelTipado =
     aluguel as unknown as AluguelDetalhes
 
+  /*
+   * =====================================================
+   * SITUAÇÃO EFETIVA
+   * =====================================================
+   *
+   * Aqui não usamos somente a situação
+   * que está gravada no banco.
+   *
+   * Também consideramos:
+   *
+   * - vencimento
+   * - data atual
+   *
+   * Assim uma mensalidade ABERTO pode ser
+   * exibida como ATRASADO automaticamente.
+   */
+
+  const situacaoEfetiva =
+    obterSituacaoEfetiva(
+      aluguelTipado.situacao,
+      aluguelTipado.vencimento
+    )
+
   const mensalidadePaga =
-    aluguelTipado.situacao === 'PAGO'
+    situacaoEfetiva === 'PAGO'
 
   const mensalidadeCancelada =
-    aluguelTipado.situacao === 'CANCELADO'
+    situacaoEfetiva === 'CANCELADO'
+
+  const mensalidadeAtrasada =
+    situacaoEfetiva === 'ATRASADO'
 
   /*
    * =====================================================
-   * CÁLCULO DO TOTAL
+   * CÁLCULO FINANCEIRO
    * =====================================================
    */
 
-  const valorPrevisto = Number(
-    aluguelTipado.valor_previsto
-  )
+  const valorPrevisto =
+    Number(
+      aluguelTipado.valor_previsto
+    )
 
-  const multa = Number(
-    aluguelTipado.multa ?? 0
-  )
+  const multa =
+    Number(
+      aluguelTipado.multa ?? 0
+    )
 
-  const juros = Number(
-    aluguelTipado.juros ?? 0
-  )
+  const juros =
+    Number(
+      aluguelTipado.juros ?? 0
+    )
 
-  const desconto = Number(
-    aluguelTipado.desconto ?? 0
-  )
+  const desconto =
+    Number(
+      aluguelTipado.desconto ?? 0
+    )
 
   const totalCalculado =
     valorPrevisto +
@@ -244,6 +325,7 @@ export default async function AluguelDetalhesPage({
           className="mb-4 inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-900"
         >
           <ArrowLeft size={16} />
+
           Voltar para aluguéis
         </Link>
 
@@ -258,7 +340,9 @@ export default async function AluguelDetalhesPage({
               </h1>
 
               <Situacao
-                situacao={aluguelTipado.situacao}
+                situacao={
+                  situacaoEfetiva
+                }
               />
             </div>
 
@@ -273,12 +357,46 @@ export default async function AluguelDetalhesPage({
                 href={`/alugueis/${aluguelTipado.id}/pagamento`}
                 className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 font-medium text-white transition hover:bg-emerald-700"
               >
-                <CreditCard size={18} />
+                <CreditCard
+                  size={18}
+                />
+
                 Registrar pagamento
               </Link>
             )}
         </div>
       </div>
+
+      {/* ==================================================
+          AVISO DE ATRASO
+          ================================================== */}
+
+      {mensalidadeAtrasada && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-5">
+          <div className="flex items-start gap-3">
+            <TriangleAlert
+              size={22}
+              className="mt-0.5 shrink-0 text-red-700"
+            />
+
+            <div>
+              <p className="font-semibold text-red-900">
+                Mensalidade em atraso
+              </p>
+
+              <p className="mt-1 text-sm leading-6 text-red-800">
+                O vencimento desta mensalidade foi em{' '}
+                <strong>
+                  {formatarData(
+                    aluguelTipado.vencimento
+                  )}
+                </strong>{' '}
+                e ainda não existe pagamento registrado.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ==================================================
           RESUMO
@@ -287,7 +405,9 @@ export default async function AluguelDetalhesPage({
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Resumo
           icone={
-            <CalendarDays size={20} />
+            <CalendarDays
+              size={20}
+            />
           }
           titulo="Competência"
           valor={formatarCompetencia(
@@ -297,17 +417,24 @@ export default async function AluguelDetalhesPage({
 
         <Resumo
           icone={
-            <CalendarDays size={20} />
+            <CalendarDays
+              size={20}
+            />
           }
           titulo="Vencimento"
           valor={formatarData(
             aluguelTipado.vencimento
           )}
+          destaque={
+            mensalidadeAtrasada
+          }
         />
 
         <Resumo
           icone={
-            <CircleDollarSign size={20} />
+            <CircleDollarSign
+              size={20}
+            />
           }
           titulo="Valor previsto"
           valor={formatarValor(
@@ -316,10 +443,15 @@ export default async function AluguelDetalhesPage({
         />
 
         <Resumo
-          icone={<CreditCard size={20} />}
+          icone={
+            <CreditCard
+              size={20}
+            />
+          }
           titulo="Valor pago"
           valor={
-            aluguelTipado.valor_pago !== null
+            aluguelTipado
+              .valor_pago !== null
               ? formatarValor(
                   aluguelTipado.valor_pago
                 )
@@ -350,8 +482,8 @@ export default async function AluguelDetalhesPage({
 
           <Campo
             titulo="Situação"
-            valor={traduzirSituacao(
-              aluguelTipado.situacao
+            valor={traduzirSituacaoAluguel(
+              situacaoEfetiva
             )}
           />
 
@@ -372,7 +504,8 @@ export default async function AluguelDetalhesPage({
           <Campo
             titulo="Valor pago"
             valor={
-              aluguelTipado.valor_pago !== null
+              aluguelTipado
+                .valor_pago !== null
                 ? formatarValor(
                     aluguelTipado.valor_pago
                   )
@@ -447,7 +580,8 @@ export default async function AluguelDetalhesPage({
           <Campo
             titulo="Número do contrato"
             valor={
-              aluguelTipado.contratos
+              aluguelTipado
+                .contratos
                 ?.numero_contrato
             }
           />
@@ -455,12 +589,17 @@ export default async function AluguelDetalhesPage({
           <Campo
             titulo="Valor mensal do contrato"
             valor={
-              aluguelTipado.contratos
-                ?.valor_mensal !== null &&
-              aluguelTipado.contratos
-                ?.valor_mensal !== undefined
+              aluguelTipado
+                .contratos
+                ?.valor_mensal !==
+                null &&
+              aluguelTipado
+                .contratos
+                ?.valor_mensal !==
+                undefined
                 ? formatarValor(
-                    aluguelTipado.contratos
+                    aluguelTipado
+                      .contratos
                       .valor_mensal
                   )
                 : null
@@ -470,7 +609,8 @@ export default async function AluguelDetalhesPage({
           <Campo
             titulo="Dia normal do vencimento"
             valor={
-              aluguelTipado.contratos
+              aluguelTipado
+                .contratos
                 ?.dia_vencimento
                 ? `Dia ${aluguelTipado.contratos.dia_vencimento}`
                 : null
@@ -478,13 +618,18 @@ export default async function AluguelDetalhesPage({
           />
         </div>
 
-        {aluguelTipado.contratos?.id && (
+        {aluguelTipado
+          .contratos
+          ?.id && (
           <div className="mt-6">
             <Link
               href={`/contratos/${aluguelTipado.contratos.id}`}
               className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 transition hover:text-blue-700 hover:underline"
             >
-              <FileText size={16} />
+              <FileText
+                size={16}
+              />
+
               Ver contrato
             </Link>
           </div>
@@ -500,44 +645,57 @@ export default async function AluguelDetalhesPage({
           <Campo
             titulo="Nome"
             valor={
-              aluguelTipado.contratos
-                ?.locatarios?.nome
+              aluguelTipado
+                .contratos
+                ?.locatarios
+                ?.nome
             }
           />
 
           <Campo
             titulo="CPF / CNPJ"
             valor={
-              aluguelTipado.contratos
-                ?.locatarios?.cpf_cnpj
+              aluguelTipado
+                .contratos
+                ?.locatarios
+                ?.cpf_cnpj
             }
           />
 
           <Campo
             titulo="Telefone"
             valor={
-              aluguelTipado.contratos
-                ?.locatarios?.telefone
+              aluguelTipado
+                .contratos
+                ?.locatarios
+                ?.telefone
             }
           />
 
           <Campo
             titulo="E-mail"
             valor={
-              aluguelTipado.contratos
-                ?.locatarios?.email
+              aluguelTipado
+                .contratos
+                ?.locatarios
+                ?.email
             }
           />
         </div>
 
-        {aluguelTipado.contratos
-          ?.locatarios?.id && (
+        {aluguelTipado
+          .contratos
+          ?.locatarios
+          ?.id && (
           <div className="mt-6">
             <Link
               href={`/locatarios/${aluguelTipado.contratos.locatarios.id}`}
               className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 transition hover:text-blue-700 hover:underline"
             >
-              <UserRound size={16} />
+              <UserRound
+                size={16}
+              />
+
               Ver cadastro do locatário
             </Link>
           </div>
@@ -553,28 +711,37 @@ export default async function AluguelDetalhesPage({
           <Campo
             titulo="Descrição"
             valor={
-              aluguelTipado.contratos
-                ?.imoveis?.descricao
+              aluguelTipado
+                .contratos
+                ?.imoveis
+                ?.descricao
             }
           />
 
           <Campo
             titulo="Endereço"
             valor={
-              aluguelTipado.contratos
-                ?.imoveis?.endereco
+              aluguelTipado
+                .contratos
+                ?.imoveis
+                ?.endereco
             }
           />
         </div>
 
-        {aluguelTipado.contratos
-          ?.imoveis?.id && (
+        {aluguelTipado
+          .contratos
+          ?.imoveis
+          ?.id && (
           <div className="mt-6">
             <Link
               href={`/imoveis/${aluguelTipado.contratos.imoveis.id}`}
               className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 transition hover:text-blue-700 hover:underline"
             >
-              <Building2 size={16} />
+              <Building2
+                size={16}
+              />
+
               Ver cadastro do imóvel
             </Link>
           </div>
@@ -588,7 +755,9 @@ export default async function AluguelDetalhesPage({
       <Secao titulo="Observações">
         <Campo
           titulo="Observações da mensalidade"
-          valor={aluguelTipado.observacoes}
+          valor={
+            aluguelTipado.observacoes
+          }
         />
       </Secao>
 
@@ -615,8 +784,8 @@ export default async function AluguelDetalhesPage({
                   {formatarData(
                     aluguelTipado.data_pagamento
                   )}
-                </strong>
-                {' '}no valor de{' '}
+                </strong>{' '}
+                no valor de{' '}
                 <strong>
                   {formatarValor(
                     aluguelTipado.valor_pago
@@ -631,6 +800,12 @@ export default async function AluguelDetalhesPage({
     </div>
   )
 }
+
+/*
+ * =====================================================
+ * SEÇÃO
+ * =====================================================
+ */
 
 function Secao({
   titulo,
@@ -650,12 +825,21 @@ function Secao({
   )
 }
 
+/*
+ * =====================================================
+ * CAMPO
+ * =====================================================
+ */
+
 function Campo({
   titulo,
   valor,
 }: {
   titulo: string
-  valor: string | null | undefined
+  valor:
+    | string
+    | null
+    | undefined
 }) {
   return (
     <div>
@@ -664,37 +848,76 @@ function Campo({
       </p>
 
       <p className="mt-1 text-base text-slate-900">
-        {valor || 'Não informado'}
+        {valor ||
+          'Não informado'}
       </p>
     </div>
   )
 }
+
+/*
+ * =====================================================
+ * RESUMO
+ * =====================================================
+ */
 
 function Resumo({
   icone,
   titulo,
   valor,
+  destaque = false,
 }: {
   icone: React.ReactNode
   titulo: string
   valor: string
+  destaque?: boolean
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
-      <div className="mb-3 text-blue-600">
+    <div
+      className={
+        destaque
+          ? 'rounded-xl border border-red-200 bg-red-50 p-5'
+          : 'rounded-xl border border-slate-200 bg-white p-5'
+      }
+    >
+      <div
+        className={
+          destaque
+            ? 'mb-3 text-red-600'
+            : 'mb-3 text-blue-600'
+        }
+      >
         {icone}
       </div>
 
-      <p className="text-sm font-medium text-slate-500">
+      <p
+        className={
+          destaque
+            ? 'text-sm font-medium text-red-700'
+            : 'text-sm font-medium text-slate-500'
+        }
+      >
         {titulo}
       </p>
 
-      <p className="mt-1 font-semibold text-slate-900">
+      <p
+        className={
+          destaque
+            ? 'mt-1 font-semibold text-red-900'
+            : 'mt-1 font-semibold text-slate-900'
+        }
+      >
         {valor}
       </p>
     </div>
   )
 }
+
+/*
+ * =====================================================
+ * CARD FINANCEIRO
+ * =====================================================
+ */
 
 function CardFinanceiro({
   titulo,
@@ -716,56 +939,55 @@ function CardFinanceiro({
   )
 }
 
-function traduzirSituacao(
-  situacao: string
-) {
-  if (situacao === 'PAGO') {
-    return 'Pago'
-  }
-
-  if (situacao === 'ATRASADO') {
-    return 'Atrasado'
-  }
-
-  if (situacao === 'CANCELADO') {
-    return 'Cancelado'
-  }
-
-  return 'Aberto'
-}
+/*
+ * =====================================================
+ * SITUAÇÃO
+ * =====================================================
+ */
 
 function Situacao({
   situacao,
 }: {
-  situacao: string
+  situacao: SituacaoAluguel
 }) {
-  if (situacao === 'PAGO') {
+  const texto =
+    traduzirSituacaoAluguel(
+      situacao
+    )
+
+  if (
+    situacao === 'PAGO'
+  ) {
     return (
       <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-        Pago
+        {texto}
       </span>
     )
   }
 
-  if (situacao === 'ATRASADO') {
+  if (
+    situacao === 'ATRASADO'
+  ) {
     return (
       <span className="inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-        Atrasado
+        {texto}
       </span>
     )
   }
 
-  if (situacao === 'CANCELADO') {
+  if (
+    situacao === 'CANCELADO'
+  ) {
     return (
       <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-        Cancelado
+        {texto}
       </span>
     )
   }
 
   return (
     <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-      Aberto
+      {texto}
     </span>
   )
 }

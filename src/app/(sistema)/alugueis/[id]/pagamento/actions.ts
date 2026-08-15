@@ -29,6 +29,48 @@ function dataValida(valor: string) {
   return data.toISOString().slice(0, 10) === valor
 }
 
+/*
+ * =====================================================
+ * DATA ATUAL NO BRASIL
+ * =====================================================
+ *
+ * Usamos o fuso de São Paulo para evitar que
+ * o servidor interprete "hoje" de acordo com
+ * outro fuso horário.
+ */
+
+function obterDataHojeBrasil() {
+  const partes = new Intl.DateTimeFormat(
+    'pt-BR',
+    {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }
+  ).formatToParts(new Date())
+
+  const ano = partes.find(
+    (parte) => parte.type === 'year'
+  )?.value
+
+  const mes = partes.find(
+    (parte) => parte.type === 'month'
+  )?.value
+
+  const dia = partes.find(
+    (parte) => parte.type === 'day'
+  )?.value
+
+  if (!ano || !mes || !dia) {
+    throw new Error(
+      'Não foi possível determinar a data atual.'
+    )
+  }
+
+  return `${ano}-${mes}-${dia}`
+}
+
 function arredondarMoeda(valor: number) {
   return Math.round(
     (valor + Number.EPSILON) * 100
@@ -98,6 +140,24 @@ export async function registrarPagamento(
   if (!dataValida(dataPagamento)) {
     throw new Error(
       'Data de pagamento inválida.'
+    )
+  }
+
+  /*
+   * =====================================================
+   * NÃO PERMITE DATA FUTURA
+   * =====================================================
+   */
+
+  const dataHoje =
+    obterDataHojeBrasil()
+
+  if (
+    dataPagamento >
+    dataHoje
+  ) {
+    throw new Error(
+      'A data do pagamento não pode ser futura.'
     )
   }
 
@@ -203,13 +263,6 @@ export async function registrarPagamento(
    * =====================================================
    * BUSCA A MENSALIDADE
    * =====================================================
-   *
-   * Conferimos novamente no servidor:
-   *
-   * - se existe
-   * - se pertence ao usuário
-   * - situação atual
-   * - valor previsto
    */
 
   const {
@@ -335,14 +388,13 @@ export async function registrarPagamento(
    * =====================================================
    * CONFERE O VALOR PAGO
    * =====================================================
-   *
-   * Trabalhamos com tolerância de 1 centavo
-   * para evitar diferenças de ponto flutuante.
    */
 
   const diferenca =
     Math.abs(
-      arredondarMoeda(valorPago) -
+      arredondarMoeda(
+        valorPago
+      ) -
         totalCalculado
     )
 
@@ -404,10 +456,6 @@ export async function registrarPagamento(
       'usuario_id',
       usuarioId
     )
-    /*
-     * Garante que a situação não mudou
-     * entre a leitura e o UPDATE.
-     */
     .eq(
       'situacao',
       mensalidade.situacao

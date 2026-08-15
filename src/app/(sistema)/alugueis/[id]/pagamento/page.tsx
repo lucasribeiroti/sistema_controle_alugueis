@@ -6,7 +6,14 @@ import {
   CircleDollarSign,
   CreditCard,
   Info,
+  TriangleAlert,
 } from 'lucide-react'
+
+import {
+  obterSituacaoEfetiva,
+  traduzirSituacaoAluguel,
+  type SituacaoAluguel,
+} from '@/lib/alugueis'
 
 import { createClient } from '@/lib/supabase/server'
 import { registrarPagamento } from './actions'
@@ -48,10 +55,13 @@ type MensalidadePagamento = {
   } | null
 }
 
-const formatarMoeda = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-})
+const formatarMoeda = new Intl.NumberFormat(
+  'pt-BR',
+  {
+    style: 'currency',
+    currency: 'BRL',
+  }
+)
 
 function formatarData(
   data: string | null
@@ -60,7 +70,8 @@ function formatarData(
     return 'Não informado'
   }
 
-  const [ano, mes, dia] = data.split('-')
+  const [ano, mes, dia] =
+    data.split('-')
 
   if (!ano || !mes || !dia) {
     return data
@@ -113,7 +124,8 @@ export default async function RegistrarPagamentoPage({
 }: Props) {
   const { id } = await params
 
-  const supabase = await createClient()
+  const supabase =
+    await createClient()
 
   /*
    * =====================================================
@@ -123,7 +135,8 @@ export default async function RegistrarPagamentoPage({
 
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } =
+    await supabase.auth.getUser()
 
   if (!user) {
     redirect('/login')
@@ -162,7 +175,10 @@ export default async function RegistrarPagamentoPage({
         )
       )
     `)
-    .eq('id', id)
+    .eq(
+      'id',
+      id
+    )
     .eq(
       'usuario_id',
       user.id
@@ -219,12 +235,24 @@ export default async function RegistrarPagamentoPage({
 
   /*
    * =====================================================
+   * SITUAÇÃO EFETIVA
+   * =====================================================
+   */
+
+  const situacaoEfetiva =
+    obterSituacaoEfetiva(
+      mensalidadeTipada.situacao,
+      mensalidadeTipada.vencimento
+    )
+
+  /*
+   * =====================================================
    * NÃO PERMITE PAGAR NOVAMENTE
    * =====================================================
    */
 
   if (
-    mensalidadeTipada.situacao ===
+    situacaoEfetiva ===
     'PAGO'
   ) {
     redirect(
@@ -239,13 +267,23 @@ export default async function RegistrarPagamentoPage({
    */
 
   if (
-    mensalidadeTipada.situacao ===
+    situacaoEfetiva ===
     'CANCELADO'
   ) {
     redirect(
       `/alugueis/${mensalidadeTipada.id}`
     )
   }
+
+  /*
+   * =====================================================
+   * VERIFICA SE ESTÁ ATRASADA
+   * =====================================================
+   */
+
+  const mensalidadeAtrasada =
+    situacaoEfetiva ===
+    'ATRASADO'
 
   /*
    * =====================================================
@@ -303,21 +341,70 @@ export default async function RegistrarPagamentoPage({
           className="mb-4 inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-900"
         >
           <ArrowLeft size={16} />
+
           Voltar para a mensalidade
         </Link>
 
-        <h1 className="text-3xl font-bold text-slate-900">
-          Registrar pagamento
-        </h1>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl font-bold text-slate-900">
+                Registrar pagamento
+              </h1>
 
-        <p className="mt-2 text-slate-500">
-          Registre o recebimento da mensalidade{' '}
-          {formatarCompetencia(
-            mensalidadeTipada.competencia
-          )}
-          .
-        </p>
+              <Situacao
+                situacao={
+                  situacaoEfetiva
+                }
+              />
+            </div>
+
+            <p className="mt-2 text-slate-500">
+              Registre o recebimento da mensalidade{' '}
+              {formatarCompetencia(
+                mensalidadeTipada.competencia
+              )}
+              .
+            </p>
+          </div>
+        </div>
       </div>
+
+      {/* ==================================================
+          AVISO DE ATRASO
+          ================================================== */}
+
+      {mensalidadeAtrasada && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-5">
+          <div className="flex items-start gap-3">
+            <TriangleAlert
+              size={22}
+              className="mt-0.5 shrink-0 text-red-700"
+            />
+
+            <div>
+              <p className="font-semibold text-red-900">
+                Pagamento em atraso
+              </p>
+
+              <p className="mt-1 text-sm leading-6 text-red-800">
+                Esta mensalidade venceu em{' '}
+                <strong>
+                  {formatarData(
+                    mensalidadeTipada.vencimento
+                  )}
+                </strong>{' '}
+                e ainda não possui pagamento registrado.
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-red-800">
+                Confira se devem ser aplicados multa ou
+                juros antes de confirmar o recebimento.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ==================================================
           RESUMO
@@ -326,7 +413,9 @@ export default async function RegistrarPagamentoPage({
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Resumo
           icone={
-            <CalendarDays size={20} />
+            <CalendarDays
+              size={20}
+            />
           }
           titulo="Competência"
           valor={formatarCompetencia(
@@ -336,17 +425,24 @@ export default async function RegistrarPagamentoPage({
 
         <Resumo
           icone={
-            <CalendarDays size={20} />
+            <CalendarDays
+              size={20}
+            />
           }
           titulo="Vencimento"
           valor={formatarData(
             mensalidadeTipada.vencimento
           )}
+          destaque={
+            mensalidadeAtrasada
+          }
         />
 
         <Resumo
           icone={
-            <CircleDollarSign size={20} />
+            <CircleDollarSign
+              size={20}
+            />
           }
           titulo="Valor previsto"
           valor={formatarMoeda.format(
@@ -356,14 +452,16 @@ export default async function RegistrarPagamentoPage({
 
         <Resumo
           icone={
-            <CreditCard size={20} />
+            <CreditCard
+              size={20}
+            />
           }
           titulo="Situação"
-          valor={
-            mensalidadeTipada.situacao ===
-            'ATRASADO'
-              ? 'Atrasado'
-              : 'Aberto'
+          valor={traduzirSituacaoAluguel(
+            situacaoEfetiva
+          )}
+          destaque={
+            mensalidadeAtrasada
           }
         />
       </div>
@@ -380,7 +478,8 @@ export default async function RegistrarPagamentoPage({
             </p>
 
             <p className="mt-1 font-semibold text-slate-900">
-              {mensalidadeTipada.contratos
+              {mensalidadeTipada
+                .contratos
                 ?.numero_contrato ||
                 'Não informado'}
             </p>
@@ -392,8 +491,10 @@ export default async function RegistrarPagamentoPage({
             </p>
 
             <p className="mt-1 font-semibold text-slate-900">
-              {mensalidadeTipada.contratos
-                ?.locatarios?.nome ||
+              {mensalidadeTipada
+                .contratos
+                ?.locatarios
+                ?.nome ||
                 'Não informado'}
             </p>
           </div>
@@ -404,8 +505,10 @@ export default async function RegistrarPagamentoPage({
             </p>
 
             <p className="mt-1 font-semibold text-slate-900">
-              {mensalidadeTipada.contratos
-                ?.imoveis?.descricao ||
+              {mensalidadeTipada
+                .contratos
+                ?.imoveis
+                ?.descricao ||
                 'Não informado'}
             </p>
           </div>
@@ -413,7 +516,7 @@ export default async function RegistrarPagamentoPage({
       </div>
 
       {/* ==================================================
-          AVISO
+          INFORMAÇÃO
           ================================================== */}
 
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
@@ -435,8 +538,9 @@ export default async function RegistrarPagamentoPage({
             </p>
 
             <p className="mt-2 text-sm leading-6 text-blue-800">
-              Nesta primeira versão não estamos
-              registrando pagamentos parciais.
+              Nesta versão, uma mensalidade é considerada
+              totalmente quitada. Pagamentos parciais ainda
+              não fazem parte do fluxo.
             </p>
           </div>
         </div>
@@ -448,12 +552,14 @@ export default async function RegistrarPagamentoPage({
 
       <div className="rounded-xl border border-slate-200 bg-white p-8">
         <form
-          action={registrarPagamentoComId}
+          action={
+            registrarPagamentoComId
+          }
           className="space-y-8"
         >
-          {/* ==================================================
-              DATA DO PAGAMENTO
-              ================================================== */}
+          {/* ==============================================
+              PAGAMENTO
+              ============================================== */}
 
           <div>
             <h2 className="text-lg font-semibold text-slate-900">
@@ -464,6 +570,10 @@ export default async function RegistrarPagamentoPage({
               Informe quando e quanto foi recebido.
             </p>
           </div>
+
+          {/* ==============================================
+              DATA DO PAGAMENTO
+              ============================================== */}
 
           <div>
             <label
@@ -480,11 +590,16 @@ export default async function RegistrarPagamentoPage({
               required
               className="w-full max-w-md rounded-lg border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
             />
+
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              Não é permitido registrar uma data de
+              pagamento futura.
+            </p>
           </div>
 
-          {/* ==================================================
+          {/* ==============================================
               COMPOSIÇÃO
-              ================================================== */}
+              ============================================== */}
 
           <div className="border-t border-slate-200 pt-8">
             <h2 className="text-lg font-semibold text-slate-900">
@@ -498,7 +613,10 @@ export default async function RegistrarPagamentoPage({
           </div>
 
           <div className="grid gap-6 md:grid-cols-3">
-            {/* Multa */}
+            {/* ============================================
+                MULTA
+                ============================================ */}
+
             <div>
               <label
                 htmlFor="multa"
@@ -528,7 +646,10 @@ export default async function RegistrarPagamentoPage({
               </p>
             </div>
 
-            {/* Juros */}
+            {/* ============================================
+                JUROS
+                ============================================ */}
+
             <div>
               <label
                 htmlFor="juros"
@@ -558,7 +679,10 @@ export default async function RegistrarPagamentoPage({
               </p>
             </div>
 
-            {/* Desconto */}
+            {/* ============================================
+                DESCONTO
+                ============================================ */}
+
             <div>
               <label
                 htmlFor="desconto"
@@ -589,9 +713,9 @@ export default async function RegistrarPagamentoPage({
             </div>
           </div>
 
-          {/* ==================================================
+          {/* ==============================================
               TOTAL ATUAL
-              ================================================== */}
+              ============================================== */}
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
             <div className="flex flex-wrap items-center justify-between gap-4">
@@ -614,17 +738,16 @@ export default async function RegistrarPagamentoPage({
             </div>
 
             <p className="mt-4 text-xs leading-5 text-slate-500">
-              Esse resumo considera os valores que já
-              estavam registrados. Se você preencher ou
-              alterar multa, juros ou desconto abaixo,
-              ajuste também o valor pago de acordo com o
-              novo total.
+              O valor acima considera o que já estiver
+              salvo na mensalidade. Se você informar
+              multa, juros ou desconto agora, ajuste o
+              valor pago para corresponder ao novo total.
             </p>
           </div>
 
-          {/* ==================================================
+          {/* ==============================================
               VALOR PAGO
-              ================================================== */}
+              ============================================== */}
 
           <div>
             <label
@@ -653,71 +776,9 @@ export default async function RegistrarPagamentoPage({
             </p>
           </div>
 
-          {/* ==================================================
-              EXEMPLO
-              ================================================== */}
-
-          <div className="rounded-xl border border-slate-200 p-5">
-            <p className="text-sm font-semibold text-slate-900">
-              Exemplo
-            </p>
-
-            <div className="mt-4 grid gap-2 text-sm text-slate-600">
-              <div className="flex justify-between gap-4">
-                <span>
-                  Valor previsto
-                </span>
-
-                <span>
-                  R$ 1.500,00
-                </span>
-              </div>
-
-              <div className="flex justify-between gap-4">
-                <span>
-                  + Multa
-                </span>
-
-                <span>
-                  R$ 30,00
-                </span>
-              </div>
-
-              <div className="flex justify-between gap-4">
-                <span>
-                  + Juros
-                </span>
-
-                <span>
-                  R$ 10,00
-                </span>
-              </div>
-
-              <div className="flex justify-between gap-4">
-                <span>
-                  - Desconto
-                </span>
-
-                <span>
-                  R$ 0,00
-                </span>
-              </div>
-
-              <div className="mt-2 flex justify-between gap-4 border-t border-slate-200 pt-3 font-semibold text-slate-900">
-                <span>
-                  Valor pago
-                </span>
-
-                <span>
-                  R$ 1.540,00
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* ==================================================
+          {/* ==============================================
               BOTÕES
-              ================================================== */}
+              ============================================== */}
 
           <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-6">
             <Link
@@ -731,7 +792,10 @@ export default async function RegistrarPagamentoPage({
               type="submit"
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 font-semibold text-white transition hover:bg-emerald-700"
             >
-              <CreditCard size={18} />
+              <CreditCard
+                size={18}
+              />
+
               Confirmar pagamento
             </button>
           </div>
@@ -741,28 +805,113 @@ export default async function RegistrarPagamentoPage({
   )
 }
 
+/*
+ * =====================================================
+ * RESUMO
+ * =====================================================
+ */
+
 function Resumo({
   icone,
   titulo,
   valor,
+  destaque = false,
 }: {
   icone: React.ReactNode
   titulo: string
   valor: string
+  destaque?: boolean
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
-      <div className="mb-3 text-blue-600">
+    <div
+      className={
+        destaque
+          ? 'rounded-xl border border-red-200 bg-red-50 p-5'
+          : 'rounded-xl border border-slate-200 bg-white p-5'
+      }
+    >
+      <div
+        className={
+          destaque
+            ? 'mb-3 text-red-600'
+            : 'mb-3 text-blue-600'
+        }
+      >
         {icone}
       </div>
 
-      <p className="text-sm font-medium text-slate-500">
+      <p
+        className={
+          destaque
+            ? 'text-sm font-medium text-red-700'
+            : 'text-sm font-medium text-slate-500'
+        }
+      >
         {titulo}
       </p>
 
-      <p className="mt-1 font-semibold text-slate-900">
+      <p
+        className={
+          destaque
+            ? 'mt-1 font-semibold text-red-900'
+            : 'mt-1 font-semibold text-slate-900'
+        }
+      >
         {valor}
       </p>
     </div>
+  )
+}
+
+/*
+ * =====================================================
+ * SITUAÇÃO
+ * =====================================================
+ */
+
+function Situacao({
+  situacao,
+}: {
+  situacao: SituacaoAluguel
+}) {
+  const texto =
+    traduzirSituacaoAluguel(
+      situacao
+    )
+
+  if (
+    situacao === 'PAGO'
+  ) {
+    return (
+      <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+        {texto}
+      </span>
+    )
+  }
+
+  if (
+    situacao === 'ATRASADO'
+  ) {
+    return (
+      <span className="inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+        {texto}
+      </span>
+    )
+  }
+
+  if (
+    situacao === 'CANCELADO'
+  ) {
+    return (
+      <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+        {texto}
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+      {texto}
+    </span>
   )
 }
