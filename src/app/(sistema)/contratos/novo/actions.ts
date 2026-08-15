@@ -5,65 +5,177 @@ import { redirect } from 'next/navigation'
 
 import { createClient } from '@/lib/supabase/server'
 
-function converterDecimal(valor: string) {
-  const valorNormalizado = valor.includes(',')
-    ? valor
-        .replace(/\./g, '')
-        .replace(',', '.')
-    : valor
+export type CampoErroContrato =
+  | 'numero_contrato'
+  | 'tipo_contrato'
+  | 'locatario_id'
+  | 'imovel_id'
+  | 'data_inicio'
+  | 'data_fim'
+  | 'valor_mensal'
+  | 'dia_vencimento'
+  | 'data_primeiro_vencimento'
+  | 'valor_primeira_mensalidade'
+  | 'data_proximo_reajuste'
+  | 'percentual_multa'
+  | 'percentual_juros'
+  | 'geral'
 
-  return Number(valorNormalizado)
+export type EstadoCriarContrato = {
+  sucesso: boolean
+  mensagem: string
+  campo?: CampoErroContrato
 }
 
-function dataValida(valor: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+/*
+ * =====================================================
+ * RETORNO DE ERRO
+ * =====================================================
+ */
+
+function retornarErro(
+  campo: CampoErroContrato,
+  mensagem: string
+): EstadoCriarContrato {
+  return {
+    sucesso: false,
+    campo,
+    mensagem,
+  }
+}
+
+/*
+ * =====================================================
+ * CONVERTE DECIMAL
+ * =====================================================
+ */
+
+function converterDecimal(
+  valor: string
+) {
+  const valorNormalizado =
+    valor.includes(',')
+      ? valor
+          .replace(/\./g, '')
+          .replace(',', '.')
+      : valor
+
+  return Number(
+    valorNormalizado
+  )
+}
+
+/*
+ * =====================================================
+ * VALIDA DATA
+ * =====================================================
+ */
+
+function dataValida(
+  valor: string
+) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      valor
+    )
+  ) {
     return false
   }
 
-  const data = new Date(`${valor}T00:00:00Z`)
+  const data =
+    new Date(
+      `${valor}T00:00:00Z`
+    )
 
-  if (Number.isNaN(data.getTime())) {
+  if (
+    Number.isNaN(
+      data.getTime()
+    )
+  ) {
     return false
   }
 
-  return data.toISOString().slice(0, 10) === valor
+  return (
+    data
+      .toISOString()
+      .slice(0, 10) ===
+    valor
+  )
 }
+
+/*
+ * =====================================================
+ * DATA ISO
+ * =====================================================
+ */
 
 function formatarDataISO(
   ano: number,
   mes: number,
   dia: number
 ) {
-  const anoTexto = String(ano).padStart(4, '0')
-  const mesTexto = String(mes).padStart(2, '0')
-  const diaTexto = String(dia).padStart(2, '0')
+  const anoTexto =
+    String(ano).padStart(
+      4,
+      '0'
+    )
+
+  const mesTexto =
+    String(mes).padStart(
+      2,
+      '0'
+    )
+
+  const diaTexto =
+    String(dia).padStart(
+      2,
+      '0'
+    )
 
   return `${anoTexto}-${mesTexto}-${diaTexto}`
 }
+
+/*
+ * =====================================================
+ * ÚLTIMO DIA DO MÊS
+ * =====================================================
+ */
 
 function ultimoDiaDoMes(
   ano: number,
   mes: number
 ) {
   return new Date(
-    Date.UTC(ano, mes, 0)
+    Date.UTC(
+      ano,
+      mes,
+      0
+    )
   ).getUTCDate()
 }
+
+/*
+ * =====================================================
+ * CRIA VENCIMENTO
+ * =====================================================
+ */
 
 function criarVencimento(
   ano: number,
   mes: number,
   diaVencimento: number
 ) {
-  const ultimoDia = ultimoDiaDoMes(
-    ano,
-    mes
-  )
+  const ultimoDia =
+    ultimoDiaDoMes(
+      ano,
+      mes
+    )
 
-  const diaReal = Math.min(
-    diaVencimento,
-    ultimoDia
-  )
+  const diaReal =
+    Math.min(
+      diaVencimento,
+      ultimoDia
+    )
 
   return formatarDataISO(
     ano,
@@ -72,28 +184,27 @@ function criarVencimento(
   )
 }
 
+/*
+ * =====================================================
+ * PRIMEIRO VENCIMENTO REGULAR
+ * =====================================================
+ */
+
 function calcularPrimeiroVencimentoRegular(
   dataInicio: string,
   diaVencimento: number
 ) {
-  const [anoTexto, mesTexto] =
+  const [
+    anoTexto,
+    mesTexto,
+  ] =
     dataInicio.split('-')
 
-  const ano = Number(anoTexto)
-  const mes = Number(mesTexto)
+  const ano =
+    Number(anoTexto)
 
-  /*
-   * Primeiro tentamos usar o mês de início
-   * do contrato.
-   *
-   * Exemplo:
-   *
-   * Início: 05/08/2026
-   * Vencimento: dia 10
-   *
-   * Primeiro vencimento:
-   * 10/08/2026
-   */
+  const mes =
+    Number(mesTexto)
 
   const vencimentoMesmoMes =
     criarVencimento(
@@ -103,28 +214,21 @@ function calcularPrimeiroVencimentoRegular(
     )
 
   if (
-    vencimentoMesmoMes >= dataInicio
+    vencimentoMesmoMes >=
+    dataInicio
   ) {
     return vencimentoMesmoMes
   }
 
-  /*
-   * Se o vencimento daquele mês já passou,
-   * usamos o mês seguinte.
-   *
-   * Exemplo:
-   *
-   * Início: 13/08/2026
-   * Vencimento: dia 10
-   *
-   * Primeiro vencimento:
-   * 10/09/2026
-   */
+  let proximoAno =
+    ano
 
-  let proximoAno = ano
-  let proximoMes = mes + 1
+  let proximoMes =
+    mes + 1
 
-  if (proximoMes > 12) {
+  if (
+    proximoMes > 12
+  ) {
     proximoMes = 1
     proximoAno += 1
   }
@@ -136,14 +240,31 @@ function calcularPrimeiroVencimentoRegular(
   )
 }
 
+/*
+ * =====================================================
+ * CRIA CONTRATO
+ * =====================================================
+ */
+
 export async function criarContrato(
+  _estadoAnterior: EstadoCriarContrato,
   formData: FormData
-) {
-  const supabase = await createClient()
+): Promise<EstadoCriarContrato> {
+  const supabase =
+    await createClient()
+
+  /*
+   * =====================================================
+   * AUTENTICAÇÃO
+   * =====================================================
+   */
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: {
+      user,
+    },
+  } =
+    await supabase.auth.getUser()
 
   if (!user) {
     redirect('/login')
@@ -151,88 +272,121 @@ export async function criarContrato(
 
   /*
    * =====================================================
-   * DADOS DO FORMULÁRIO
+   * DADOS
    * =====================================================
    */
 
-  const numeroContrato = String(
-    formData.get('numero_contrato') || ''
-  ).trim()
+  const numeroContrato =
+    String(
+      formData.get(
+        'numero_contrato'
+      ) ?? ''
+    ).trim()
 
-  const tipoContrato = String(
-    formData.get('tipo_contrato') || ''
-  ).trim()
+  const tipoContrato =
+    String(
+      formData.get(
+        'tipo_contrato'
+      ) ?? ''
+    ).trim()
 
-  const locatarioId = String(
-    formData.get('locatario_id') || ''
-  ).trim()
+  const locatarioId =
+    String(
+      formData.get(
+        'locatario_id'
+      ) ?? ''
+    ).trim()
 
-  const imovelId = String(
-    formData.get('imovel_id') || ''
-  ).trim()
+  const imovelId =
+    String(
+      formData.get(
+        'imovel_id'
+      ) ?? ''
+    ).trim()
 
-  const dataInicio = String(
-    formData.get('data_inicio') || ''
-  ).trim()
+  const dataInicio =
+    String(
+      formData.get(
+        'data_inicio'
+      ) ?? ''
+    ).trim()
 
-  const dataFim = String(
-    formData.get('data_fim') || ''
-  ).trim()
+  const dataFim =
+    String(
+      formData.get(
+        'data_fim'
+      ) ?? ''
+    ).trim()
 
-  const valorMensalDigitado = String(
-    formData.get('valor_mensal') || ''
-  ).trim()
+  const valorMensalDigitado =
+    String(
+      formData.get(
+        'valor_mensal'
+      ) ?? ''
+    ).trim()
 
-  const diaVencimentoDigitado = String(
-    formData.get('dia_vencimento') || ''
-  ).trim()
+  const diaVencimentoDigitado =
+    String(
+      formData.get(
+        'dia_vencimento'
+      ) ?? ''
+    ).trim()
 
-  /*
-   * NOVOS CAMPOS
-   */
-
-  const dataPrimeiroVencimento = String(
-    formData.get(
-      'data_primeiro_vencimento'
-    ) || ''
-  ).trim()
+  const dataPrimeiroVencimento =
+    String(
+      formData.get(
+        'data_primeiro_vencimento'
+      ) ?? ''
+    ).trim()
 
   const valorPrimeiraMensalidadeDigitado =
     String(
       formData.get(
         'valor_primeira_mensalidade'
-      ) || ''
+      ) ?? ''
     ).trim()
 
-  const indiceReajuste = String(
-    formData.get('indice_reajuste') || ''
-  ).trim()
+  const indiceReajuste =
+    String(
+      formData.get(
+        'indice_reajuste'
+      ) ?? ''
+    ).trim()
 
-  const regraReajuste = String(
-    formData.get('regra_reajuste') || ''
-  ).trim()
+  const regraReajuste =
+    String(
+      formData.get(
+        'regra_reajuste'
+      ) ?? ''
+    ).trim()
 
-  const dataProximoReajuste = String(
-    formData.get(
-      'data_proximo_reajuste'
-    ) || ''
-  ).trim()
+  const dataProximoReajuste =
+    String(
+      formData.get(
+        'data_proximo_reajuste'
+      ) ?? ''
+    ).trim()
 
-  const percentualMultaDigitado = String(
-    formData.get(
-      'percentual_multa'
-    ) || ''
-  ).trim()
+  const percentualMultaDigitado =
+    String(
+      formData.get(
+        'percentual_multa'
+      ) ?? ''
+    ).trim()
 
-  const percentualJurosDigitado = String(
-    formData.get(
-      'percentual_juros'
-    ) || ''
-  ).trim()
+  const percentualJurosDigitado =
+    String(
+      formData.get(
+        'percentual_juros'
+      ) ?? ''
+    ).trim()
 
-  const observacoes = String(
-    formData.get('observacoes') || ''
-  ).trim()
+  const observacoes =
+    String(
+      formData.get(
+        'observacoes'
+      ) ?? ''
+    ).trim()
 
   /*
    * =====================================================
@@ -240,8 +394,11 @@ export async function criarContrato(
    * =====================================================
    */
 
-  if (!numeroContrato) {
-    throw new Error(
+  if (
+    !numeroContrato
+  ) {
+    return retornarErro(
+      'numero_contrato',
       'O número do contrato é obrigatório.'
     )
   }
@@ -256,7 +413,8 @@ export async function criarContrato(
     tipoContrato !== 'NOVO' &&
     tipoContrato !== 'ANTIGO'
   ) {
-    throw new Error(
+    return retornarErro(
+      'tipo_contrato',
       'Tipo de contrato inválido.'
     )
   }
@@ -267,8 +425,11 @@ export async function criarContrato(
    * =====================================================
    */
 
-  if (!locatarioId) {
-    throw new Error(
+  if (
+    !locatarioId
+  ) {
+    return retornarErro(
+      'locatario_id',
       'Selecione um locatário.'
     )
   }
@@ -279,8 +440,11 @@ export async function criarContrato(
    * =====================================================
    */
 
-  if (!imovelId) {
-    throw new Error(
+  if (
+    !imovelId
+  ) {
+    return retornarErro(
+      'imovel_id',
       'Selecione um imóvel.'
     )
   }
@@ -291,14 +455,22 @@ export async function criarContrato(
    * =====================================================
    */
 
-  if (!dataInicio) {
-    throw new Error(
+  if (
+    !dataInicio
+  ) {
+    return retornarErro(
+      'data_inicio',
       'A data de início é obrigatória.'
     )
   }
 
-  if (!dataValida(dataInicio)) {
-    throw new Error(
+  if (
+    !dataValida(
+      dataInicio
+    )
+  ) {
+    return retornarErro(
+      'data_inicio',
       'Data de início inválida.'
     )
   }
@@ -309,15 +481,26 @@ export async function criarContrato(
    * =====================================================
    */
 
-  if (dataFim) {
-    if (!dataValida(dataFim)) {
-      throw new Error(
+  if (
+    dataFim
+  ) {
+    if (
+      !dataValida(
+        dataFim
+      )
+    ) {
+      return retornarErro(
+        'data_fim',
         'Data de término inválida.'
       )
     }
 
-    if (dataFim < dataInicio) {
-      throw new Error(
+    if (
+      dataFim <
+      dataInicio
+    ) {
+      return retornarErro(
+        'data_fim',
         'A data de término não pode ser anterior à data de início.'
       )
     }
@@ -329,8 +512,11 @@ export async function criarContrato(
    * =====================================================
    */
 
-  if (!valorMensalDigitado) {
-    throw new Error(
+  if (
+    !valorMensalDigitado
+  ) {
+    return retornarErro(
+      'valor_mensal',
       'O valor mensal é obrigatório.'
     )
   }
@@ -341,10 +527,13 @@ export async function criarContrato(
     )
 
   if (
-    !Number.isFinite(valorMensal) ||
+    !Number.isFinite(
+      valorMensal
+    ) ||
     valorMensal <= 0
   ) {
-    throw new Error(
+    return retornarErro(
+      'valor_mensal',
       'Valor mensal inválido.'
     )
   }
@@ -355,22 +544,29 @@ export async function criarContrato(
    * =====================================================
    */
 
-  if (!diaVencimentoDigitado) {
-    throw new Error(
+  if (
+    !diaVencimentoDigitado
+  ) {
+    return retornarErro(
+      'dia_vencimento',
       'O dia do vencimento é obrigatório.'
     )
   }
 
-  const diaVencimento = Number(
-    diaVencimentoDigitado
-  )
+  const diaVencimento =
+    Number(
+      diaVencimentoDigitado
+    )
 
   if (
-    !Number.isInteger(diaVencimento) ||
+    !Number.isInteger(
+      diaVencimento
+    ) ||
     diaVencimento < 1 ||
     diaVencimento > 31
   ) {
-    throw new Error(
+    return retornarErro(
+      'dia_vencimento',
       'O dia do vencimento deve estar entre 1 e 31.'
     )
   }
@@ -379,17 +575,6 @@ export async function criarContrato(
    * =====================================================
    * PRIMEIRO VENCIMENTO REGULAR
    * =====================================================
-   *
-   * Calculamos automaticamente até quando
-   * a primeira mensalidade especial pode ocorrer.
-   *
-   * Exemplo:
-   *
-   * Início: 13/08/2026
-   * Vencimento normal: dia 10
-   *
-   * Primeiro vencimento regular:
-   * 10/09/2026
    */
 
   const primeiroVencimentoRegular =
@@ -404,63 +589,52 @@ export async function criarContrato(
    * =====================================================
    */
 
-  if (dataPrimeiroVencimento) {
+  if (
+    dataPrimeiroVencimento
+  ) {
     if (
       !dataValida(
         dataPrimeiroVencimento
       )
     ) {
-      throw new Error(
+      return retornarErro(
+        'data_primeiro_vencimento',
         'Data do primeiro vencimento inválida.'
       )
     }
 
     /*
-     * Não pode ser anterior ao início.
+     * Esse era o erro que estava
+     * abrindo o Runtime Error.
      */
 
     if (
       dataPrimeiroVencimento <
       dataInicio
     ) {
-      throw new Error(
+      return retornarErro(
+        'data_primeiro_vencimento',
         'O primeiro vencimento não pode ser anterior ao início do contrato.'
       )
     }
-
-    /*
-     * Também não pode ultrapassar o primeiro
-     * vencimento regular.
-     *
-     * Exemplo:
-     *
-     * Início: 13/08
-     * Dia normal: 10
-     *
-     * Limite:
-     * 10/09
-     */
 
     if (
       dataPrimeiroVencimento >
       primeiroVencimentoRegular
     ) {
-      throw new Error(
+      return retornarErro(
+        'data_primeiro_vencimento',
         'O primeiro vencimento não pode ser posterior ao primeiro vencimento regular do contrato.'
       )
     }
 
-    /*
-     * Se existe data final, o primeiro
-     * vencimento também precisa estar dentro
-     * do período do contrato.
-     */
-
     if (
       dataFim &&
-      dataPrimeiroVencimento > dataFim
+      dataPrimeiroVencimento >
+        dataFim
     ) {
-      throw new Error(
+      return retornarErro(
+        'data_primeiro_vencimento',
         'O primeiro vencimento não pode ser posterior ao término do contrato.'
       )
     }
@@ -468,7 +642,7 @@ export async function criarContrato(
 
   /*
    * =====================================================
-   * VALOR DA PRIMEIRA MENSALIDADE
+   * PRIMEIRA MENSALIDADE
    * =====================================================
    */
 
@@ -487,9 +661,11 @@ export async function criarContrato(
       !Number.isFinite(
         valorPrimeiraMensalidade
       ) ||
-      valorPrimeiraMensalidade <= 0
+      valorPrimeiraMensalidade <=
+        0
     ) {
-      throw new Error(
+      return retornarErro(
+        'valor_primeira_mensalidade',
         'Valor da primeira mensalidade inválido.'
       )
     }
@@ -504,7 +680,9 @@ export async function criarContrato(
   let percentualMulta:
     number | null = null
 
-  if (percentualMultaDigitado) {
+  if (
+    percentualMultaDigitado
+  ) {
     percentualMulta =
       converterDecimal(
         percentualMultaDigitado
@@ -516,7 +694,8 @@ export async function criarContrato(
       ) ||
       percentualMulta < 0
     ) {
-      throw new Error(
+      return retornarErro(
+        'percentual_multa',
         'Percentual de multa inválido.'
       )
     }
@@ -531,7 +710,9 @@ export async function criarContrato(
   let percentualJuros:
     number | null = null
 
-  if (percentualJurosDigitado) {
+  if (
+    percentualJurosDigitado
+  ) {
     percentualJuros =
       converterDecimal(
         percentualJurosDigitado
@@ -543,7 +724,8 @@ export async function criarContrato(
       ) ||
       percentualJuros < 0
     ) {
-      throw new Error(
+      return retornarErro(
+        'percentual_juros',
         'Percentual de juros inválido.'
       )
     }
@@ -555,13 +737,16 @@ export async function criarContrato(
    * =====================================================
    */
 
-  if (dataProximoReajuste) {
+  if (
+    dataProximoReajuste
+  ) {
     if (
       !dataValida(
         dataProximoReajuste
       )
     ) {
-      throw new Error(
+      return retornarErro(
+        'data_proximo_reajuste',
         'Data do próximo reajuste inválida.'
       )
     }
@@ -570,7 +755,8 @@ export async function criarContrato(
       dataProximoReajuste <
       dataInicio
     ) {
-      throw new Error(
+      return retornarErro(
+        'data_proximo_reajuste',
         'A data do próximo reajuste não pode ser anterior ao início do contrato.'
       )
     }
@@ -585,158 +771,193 @@ export async function criarContrato(
   const {
     data: locatario,
     error: erroLocatario,
-  } = await supabase
-    .from('locatarios')
-    .select('id')
-    .eq('id', locatarioId)
-    .eq('usuario_id', user.id)
-    .eq('ativo', true)
-    .single()
+  } =
+    await supabase
+      .from(
+        'locatarios'
+      )
+      .select('id')
+      .eq(
+        'id',
+        locatarioId
+      )
+      .eq(
+        'usuario_id',
+        user.id
+      )
+      .eq(
+        'ativo',
+        true
+      )
+      .single()
 
   if (
     erroLocatario ||
     !locatario
   ) {
-    throw new Error(
-      'O locatário selecionado não está disponível para este contrato.'
+    return retornarErro(
+      'locatario_id',
+      'O locatário selecionado não está mais disponível para este contrato.'
     )
   }
 
   /*
    * =====================================================
-   * RESERVA O IMÓVEL
+   * RESERVA IMÓVEL
    * =====================================================
    */
 
   const {
-    data: imoveisAtualizados,
-    error: erroReservarImovel,
-  } = await supabase
-    .from('imoveis')
-    .update({
-      situacao: 'ALUGADO',
-    })
-    .eq('id', imovelId)
-    .eq('usuario_id', user.id)
-    .eq(
-      'situacao',
-      'DISPONIVEL'
-    )
-    .select('id')
+    data:
+      imoveisAtualizados,
+    error:
+      erroReservarImovel,
+  } =
+    await supabase
+      .from(
+        'imoveis'
+      )
+      .update({
+        situacao:
+          'ALUGADO',
+      })
+      .eq(
+        'id',
+        imovelId
+      )
+      .eq(
+        'usuario_id',
+        user.id
+      )
+      .eq(
+        'situacao',
+        'DISPONIVEL'
+      )
+      .select('id')
 
   if (
     erroReservarImovel ||
     !imoveisAtualizados ||
-    imoveisAtualizados.length !== 1
+    imoveisAtualizados.length !==
+      1
   ) {
-    console.log(
+    console.error(
       'NÃO FOI POSSÍVEL RESERVAR O IMÓVEL'
     )
 
-    if (erroReservarImovel) {
-      console.log(
+    if (
+      erroReservarImovel
+    ) {
+      console.error(
         'message:',
         erroReservarImovel.message
       )
 
-      console.log(
+      console.error(
         'code:',
         erroReservarImovel.code
       )
 
-      console.log(
+      console.error(
         'details:',
         erroReservarImovel.details
       )
 
-      console.log(
+      console.error(
         'hint:',
         erroReservarImovel.hint
       )
     }
 
-    throw new Error(
+    return retornarErro(
+      'imovel_id',
       'Este imóvel não está mais disponível para locação.'
     )
   }
 
   /*
    * =====================================================
-   * CRIA O CONTRATO
+   * CRIA CONTRATO
    * =====================================================
    */
 
   const {
-    data: contratoCriado,
-    error: erroContrato,
-  } = await supabase
-    .from('contratos')
-    .insert({
-      usuario_id: user.id,
+    data:
+      contratoCriado,
+    error:
+      erroContrato,
+  } =
+    await supabase
+      .from(
+        'contratos'
+      )
+      .insert({
+        usuario_id:
+          user.id,
 
-      locatario_id:
-        locatarioId,
+        locatario_id:
+          locatarioId,
 
-      imovel_id:
-        imovelId,
+        imovel_id:
+          imovelId,
 
-      numero_contrato:
-        numeroContrato,
+        numero_contrato:
+          numeroContrato,
 
-      tipo_contrato:
-        tipoContrato,
+        tipo_contrato:
+          tipoContrato,
 
-      data_inicio:
-        dataInicio,
+        data_inicio:
+          dataInicio,
 
-      data_fim:
-        dataFim || null,
+        data_fim:
+          dataFim ||
+          null,
 
-      valor_mensal:
-        valorMensal,
+        valor_mensal:
+          valorMensal,
 
-      dia_vencimento:
-        diaVencimento,
+        dia_vencimento:
+          diaVencimento,
 
-      /*
-       * NOVOS CAMPOS
-       */
+        data_primeiro_vencimento:
+          dataPrimeiroVencimento ||
+          null,
 
-      data_primeiro_vencimento:
-        dataPrimeiroVencimento ||
-        null,
+        valor_primeira_mensalidade:
+          valorPrimeiraMensalidade,
 
-      valor_primeira_mensalidade:
-        valorPrimeiraMensalidade,
+        indice_reajuste:
+          indiceReajuste ||
+          null,
 
-      indice_reajuste:
-        indiceReajuste || null,
+        regra_reajuste:
+          regraReajuste ||
+          null,
 
-      regra_reajuste:
-        regraReajuste || null,
+        data_proximo_reajuste:
+          dataProximoReajuste ||
+          null,
 
-      data_proximo_reajuste:
-        dataProximoReajuste ||
-        null,
+        percentual_multa:
+          percentualMulta,
 
-      percentual_multa:
-        percentualMulta,
+        percentual_juros:
+          percentualJuros,
 
-      percentual_juros:
-        percentualJuros,
+        status:
+          'ATIVO',
 
-      status:
-        'ATIVO',
-
-      observacoes:
-        observacoes || null,
-    })
-    .select('id')
-    .single()
+        observacoes:
+          observacoes ||
+          null,
+      })
+      .select('id')
+      .single()
 
   /*
    * =====================================================
-   * SE O CONTRATO FALHAR
+   * ERRO AO CRIAR
    * =====================================================
    */
 
@@ -744,93 +965,114 @@ export async function criarContrato(
     erroContrato ||
     !contratoCriado
   ) {
-    console.log(
+    console.error(
       'ERRO AO CADASTRAR CONTRATO'
     )
 
-    if (erroContrato) {
-      console.log(
+    if (
+      erroContrato
+    ) {
+      console.error(
         'message:',
         erroContrato.message
       )
 
-      console.log(
+      console.error(
         'code:',
         erroContrato.code
       )
 
-      console.log(
+      console.error(
         'details:',
         erroContrato.details
       )
 
-      console.log(
+      console.error(
         'hint:',
         erroContrato.hint
       )
     }
 
     /*
-     * Tenta liberar novamente o imóvel.
+     * Libera o imóvel novamente.
      */
 
     const {
-      error: erroLiberarImovel,
-    } = await supabase
-      .from('imoveis')
-      .update({
-        situacao: 'DISPONIVEL',
-      })
-      .eq('id', imovelId)
-      .eq('usuario_id', user.id)
-      .eq(
-        'situacao',
-        'ALUGADO'
-      )
+      error:
+        erroLiberarImovel,
+    } =
+      await supabase
+        .from(
+          'imoveis'
+        )
+        .update({
+          situacao:
+            'DISPONIVEL',
+        })
+        .eq(
+          'id',
+          imovelId
+        )
+        .eq(
+          'usuario_id',
+          user.id
+        )
+        .eq(
+          'situacao',
+          'ALUGADO'
+        )
 
-    if (erroLiberarImovel) {
-      console.log(
+    if (
+      erroLiberarImovel
+    ) {
+      console.error(
         'ERRO AO DEVOLVER IMÓVEL PARA DISPONÍVEL'
       )
 
-      console.log(
-        'message:',
-        erroLiberarImovel.message
-      )
-
-      console.log(
-        'code:',
-        erroLiberarImovel.code
-      )
-
-      console.log(
-        'details:',
-        erroLiberarImovel.details
-      )
-
-      console.log(
-        'hint:',
-        erroLiberarImovel.hint
+      console.error(
+        erroLiberarImovel
       )
     }
 
-    throw new Error(
-      'Não foi possível cadastrar o contrato.'
+    /*
+     * Número de contrato duplicado.
+     */
+
+    if (
+      erroContrato?.code ===
+      '23505'
+    ) {
+      return retornarErro(
+        'numero_contrato',
+        'Já existe um contrato cadastrado com este número.'
+      )
+    }
+
+    return retornarErro(
+      'geral',
+      'Não foi possível cadastrar o contrato. Verifique os dados e tente novamente.'
     )
   }
 
   /*
    * =====================================================
-   * ATUALIZA AS TELAS
+   * SUCESSO
    * =====================================================
    */
 
-  revalidatePath('/contratos')
-  revalidatePath('/imoveis')
+  revalidatePath(
+    '/contratos'
+  )
+
+  revalidatePath(
+    '/imoveis'
+  )
 
   revalidatePath(
     `/imoveis/${imovelId}`
   )
 
-  redirect('/contratos')
+  redirect(
+    '/contratos'
+  )
 }

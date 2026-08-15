@@ -1,23 +1,283 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
-import { Plus, Users } from "lucide-react";
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
 
-import { createClient } from "@/lib/supabase/server";
+import {
+  Plus,
+} from 'lucide-react'
 
-export default async function LocatariosPage() {
-  const supabase = await createClient();
+import {
+  createClient,
+} from '@/lib/supabase/server'
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+type LocatarioLista = {
+  id: string
+  nome: string
+  tipo_pessoa: string
+  cpf_cnpj: string | null
+  telefone: string | null
+  email: string | null
+  ativo: boolean
+}
 
-  // Proteção da página
-  if (!user) {
-    redirect("/login");
+/*
+ * =====================================================
+ * SOMENTE NÚMEROS
+ * =====================================================
+ */
+
+function somenteNumeros(
+  valor: string
+) {
+  return valor.replace(
+    /\D/g,
+    ''
+  )
+}
+
+/*
+ * =====================================================
+ * CPF
+ * =====================================================
+ *
+ * 12156825625
+ *
+ * ->
+ *
+ * 121.568.256-25
+ */
+
+function formatarCpf(
+  valor: string
+) {
+  const numeros =
+    somenteNumeros(
+      valor
+    ).slice(
+      0,
+      11
+    )
+
+  if (
+    numeros.length !== 11
+  ) {
+    return valor
   }
 
-  const { data: locatarios, error } = await supabase
-    .from("locatarios")
+  return (
+    numeros.slice(
+      0,
+      3
+    ) +
+    '.' +
+    numeros.slice(
+      3,
+      6
+    ) +
+    '.' +
+    numeros.slice(
+      6,
+      9
+    ) +
+    '-' +
+    numeros.slice(
+      9,
+      11
+    )
+  )
+}
+
+/*
+ * =====================================================
+ * CNPJ
+ * =====================================================
+ *
+ * 15659987655554
+ *
+ * ->
+ *
+ * 15.659.987/6555-54
+ */
+
+function formatarCnpj(
+  valor: string
+) {
+  const numeros =
+    somenteNumeros(
+      valor
+    ).slice(
+      0,
+      14
+    )
+
+  if (
+    numeros.length !== 14
+  ) {
+    return valor
+  }
+
+  return (
+    numeros.slice(
+      0,
+      2
+    ) +
+    '.' +
+    numeros.slice(
+      2,
+      5
+    ) +
+    '.' +
+    numeros.slice(
+      5,
+      8
+    ) +
+    '/' +
+    numeros.slice(
+      8,
+      12
+    ) +
+    '-' +
+    numeros.slice(
+      12,
+      14
+    )
+  )
+}
+
+/*
+ * =====================================================
+ * CPF OU CNPJ
+ * =====================================================
+ */
+
+function formatarCpfCnpj(
+  valor: string | null,
+  tipoPessoa: string
+) {
+  if (!valor) {
+    return 'Não informado'
+  }
+
+  if (
+    tipoPessoa === 'PJ'
+  ) {
+    return formatarCnpj(
+      valor
+    )
+  }
+
+  return formatarCpf(
+    valor
+  )
+}
+
+/*
+ * =====================================================
+ * TELEFONE
+ * =====================================================
+ *
+ * 32984819297
+ *
+ * ->
+ *
+ * (32) 98481-9297
+ */
+
+function formatarTelefone(
+  valor: string | null
+) {
+  if (!valor) {
+    return 'Não informado'
+  }
+
+  const numeros =
+    somenteNumeros(
+      valor
+    ).slice(
+      0,
+      11
+    )
+
+  if (
+    numeros.length !== 11
+  ) {
+    return valor
+  }
+
+  return (
+    '(' +
+    numeros.slice(
+      0,
+      2
+    ) +
+    ') ' +
+    numeros.slice(
+      2,
+      7
+    ) +
+    '-' +
+    numeros.slice(
+      7,
+      11
+    )
+  )
+}
+
+/*
+ * =====================================================
+ * TIPO DE PESSOA
+ * =====================================================
+ */
+
+function traduzirTipoPessoa(
+  tipoPessoa: string
+) {
+  if (
+    tipoPessoa === 'PJ'
+  ) {
+    return 'Pessoa Jurídica'
+  }
+
+  return 'Pessoa Física'
+}
+
+/*
+ * =====================================================
+ * PÁGINA
+ * =====================================================
+ */
+
+export default async function LocatariosPage() {
+  const supabase =
+    await createClient()
+
+  /*
+   * =====================================================
+   * AUTENTICAÇÃO
+   * =====================================================
+   */
+
+  const {
+    data: {
+      user,
+    },
+  } =
+    await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  /*
+   * =====================================================
+   * BUSCA LOCATÁRIOS
+   * =====================================================
+   */
+
+  const {
+    data: locatarios,
+    error,
+  } = await supabase
+    .from('locatarios')
     .select(`
       id,
       nome,
@@ -25,24 +285,70 @@ export default async function LocatariosPage() {
       cpf_cnpj,
       telefone,
       email,
-      ativo,
-      criado_em
+      ativo
     `)
-    .eq("usuario_id", user.id)
-    .order("nome", { ascending: true });
+    .eq(
+      'usuario_id',
+      user.id
+    )
+    .order(
+      'nome',
+      {
+        ascending: true,
+      }
+    )
+
+  /*
+   * =====================================================
+   * ERRO
+   * =====================================================
+   */
 
   if (error) {
-    console.log("ERRO SUPABASE LOCATARIOS:");
-    console.log("message:", error.message);
-    console.log("code:", error.code);
-    console.log("details:", error.details);
-    console.log("hint:", error.hint);
+    console.error(
+      'ERRO AO CARREGAR LOCATÁRIOS'
+    )
+
+    console.error(
+      'message:',
+      error.message
+    )
+
+    console.error(
+      'code:',
+      error.code
+    )
+
+    console.error(
+      'details:',
+      error.details
+    )
+
+    console.error(
+      'hint:',
+      error.hint
+    )
   }
+
+  /*
+   * =====================================================
+   * TIPAGEM
+   * =====================================================
+   */
+
+  const lista =
+    (
+      locatarios as
+        LocatarioLista[] | null
+    ) ?? []
 
   return (
     <div className="space-y-8">
-      {/* Cabeçalho */}
-      <div className="flex items-start justify-between gap-4">
+      {/* ==================================================
+          CABEÇALHO
+          ================================================== */}
+
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">
             Locatários
@@ -55,128 +361,202 @@ export default async function LocatariosPage() {
 
         <Link
           href="/locatarios/novo"
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700"
         >
-          <Plus size={18} />
+          <Plus
+            size={18}
+          />
+
           Novo locatário
         </Link>
       </div>
 
-      {/* Erro */}
-      {error ? (
+      {/* ==================================================
+          ERRO
+          ================================================== */}
+
+      {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">
           Não foi possível carregar os locatários.
         </div>
-      ) : !locatarios || locatarios.length === 0 ? (
-        /* Estado vazio */
-        <div className="flex min-h-80 flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-8 text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-            <Users size={26} />
+      )}
+
+      {/* ==================================================
+          SEM LOCATÁRIOS
+          ================================================== */}
+
+      {!error &&
+        lista.length === 0 && (
+          <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
+            <p className="font-semibold text-slate-800">
+              Nenhum locatário cadastrado.
+            </p>
+
+            <p className="mt-2 text-sm text-slate-500">
+              Cadastre o primeiro locatário para começar.
+            </p>
           </div>
+        )}
 
-          <h2 className="text-lg font-semibold text-slate-900">
-            Nenhum locatário cadastrado
-          </h2>
+      {/* ==================================================
+          TABELA
+          ================================================== */}
 
-          <p className="mt-2 max-w-md text-sm text-slate-500">
-            Cadastre seu primeiro locatário para começar a criar contratos e
-            controlar seus aluguéis.
-          </p>
-
-          <Link
-            href="/locatarios/novo"
-            className="mt-6 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            <Plus size={18} />
-            Cadastrar locatário
-          </Link>
-        </div>
-      ) : (
-        /* Tabela */
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <div className="overflow-x-auto">
+      {!error &&
+        lista.length > 0 && (
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <table className="w-full">
+              {/* ============================================
+                  CABEÇALHO
+                  ============================================ */}
+
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <Cabecalho>
                     Nome
-                  </th>
+                  </Cabecalho>
 
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <Cabecalho>
                     Tipo
-                  </th>
+                  </Cabecalho>
 
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <Cabecalho>
                     CPF / CNPJ
-                  </th>
+                  </Cabecalho>
 
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <Cabecalho>
                     Telefone
-                  </th>
+                  </Cabecalho>
 
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <Cabecalho>
                     E-mail
-                  </th>
+                  </Cabecalho>
 
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <Cabecalho>
                     Status
-                  </th>
+                  </Cabecalho>
                 </tr>
               </thead>
 
+              {/* ============================================
+                  DADOS
+                  ============================================ */}
+
               <tbody className="divide-y divide-slate-100">
-                {locatarios.map((locatario) => (
-                  <tr
-                    key={locatario.id}
-                    className="transition hover:bg-slate-50"
-                  >
-                    {/* Nome clicável */}
-                    <td className="px-6 py-4 font-medium">
-                      <Link
-                        href={`/locatarios/${locatario.id}`}
-                        className="text-slate-900 transition hover:text-blue-600 hover:underline"
-                      >
-                        {locatario.nome}
-                      </Link>
-                    </td>
+                {lista.map(
+                  (
+                    locatario
+                  ) => (
+                    <tr
+                      key={
+                        locatario.id
+                      }
+                      className="transition hover:bg-slate-50"
+                    >
+                      {/* NOME */}
 
-                    {/* PF / PJ */}
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {locatario.tipo_pessoa === "PJ"
-                        ? "Pessoa Jurídica"
-                        : "Pessoa Física"}
-                    </td>
+                      <td className="px-6 py-4">
+                        <Link
+                          href={`/locatarios/${locatario.id}`}
+                          className="font-medium text-slate-900 transition hover:text-blue-600 hover:underline"
+                        >
+                          {locatario.nome}
+                        </Link>
+                      </td>
 
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {locatario.cpf_cnpj || "-"}
-                    </td>
+                      {/* TIPO */}
 
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {locatario.telefone || "-"}
-                    </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {traduzirTipoPessoa(
+                          locatario.tipo_pessoa
+                        )}
+                      </td>
 
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {locatario.email || "-"}
-                    </td>
+                      {/* CPF / CNPJ */}
 
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                          locatario.ativo
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {locatario.ativo ? "Ativo" : "Inativo"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="px-6 py-4 text-sm font-medium text-slate-700">
+                        {formatarCpfCnpj(
+                          locatario.cpf_cnpj,
+                          locatario.tipo_pessoa
+                        )}
+                      </td>
+
+                      {/* TELEFONE */}
+
+                      <td className="px-6 py-4 text-sm text-slate-700">
+                        {formatarTelefone(
+                          locatario.telefone
+                        )}
+                      </td>
+
+                      {/* E-MAIL */}
+
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {locatario.email ||
+                          'Não informado'}
+                      </td>
+
+                      {/* STATUS */}
+
+                      <td className="px-6 py-4">
+                        <Status
+                          ativo={
+                            locatario.ativo
+                          }
+                        />
+                      </td>
+                    </tr>
+                  )
+                )}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
     </div>
-  );
+  )
+}
+
+/*
+ * =====================================================
+ * CABEÇALHO
+ * =====================================================
+ */
+
+function Cabecalho({
+  children,
+}: {
+  children:
+    React.ReactNode
+}) {
+  return (
+    <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+      {children}
+    </th>
+  )
+}
+
+/*
+ * =====================================================
+ * STATUS
+ * =====================================================
+ */
+
+function Status({
+  ativo,
+}: {
+  ativo: boolean
+}) {
+  if (ativo) {
+    return (
+      <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+        Ativo
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+      Inativo
+    </span>
+  )
 }

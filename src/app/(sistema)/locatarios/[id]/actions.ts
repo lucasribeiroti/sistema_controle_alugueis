@@ -7,46 +7,218 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function alterarStatusLocatario(
   id: string,
-  ativoAtual: boolean
+  _formData: FormData
 ) {
-  const supabase = await createClient()
+  const supabase =
+    await createClient()
+
+  /*
+   * =====================================================
+   * AUTENTICAÇÃO
+   * =====================================================
+   */
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: {
+      user,
+    },
+  } =
+    await supabase.auth.getUser()
 
   if (!user) {
     redirect('/login')
   }
 
-  const novoStatus = !ativoAtual
+  /*
+   * =====================================================
+   * BUSCA O STATUS ATUAL
+   * =====================================================
+   *
+   * Não confiamos no status enviado pela tela.
+   * Buscamos novamente no banco antes de alterar.
+   */
 
-  const { data, error } = await supabase
+  const {
+    data: locatario,
+    error: erroBusca,
+  } = await supabase
     .from('locatarios')
-    .update({
-      ativo: novoStatus,
-    })
-    .eq('id', id)
-    .eq('usuario_id', user.id)
-    .select('id, ativo')
+    .select(`
+      id,
+      ativo
+    `)
+    .eq(
+      'id',
+      id
+    )
+    .eq(
+      'usuario_id',
+      user.id
+    )
     .single()
 
-  if (error) {
-    console.log('ERRO AO ALTERAR STATUS DO LOCATÁRIO')
-    console.log('message:', error.message)
-    console.log('code:', error.code)
-    console.log('details:', error.details)
-    console.log('hint:', error.hint)
+  if (
+    erroBusca ||
+    !locatario
+  ) {
+    console.error(
+      'ERRO AO BUSCAR LOCATÁRIO'
+    )
+
+    console.error(
+      erroBusca
+    )
 
     throw new Error(
-      'Não foi possível alterar o status do locatário.'
+      'Locatário não encontrado.'
     )
   }
 
-  if (!data) {
-    throw new Error('Locatário não encontrado.')
+  /*
+   * =====================================================
+   * INATIVAR
+   * =====================================================
+   */
+
+  if (
+    locatario.ativo
+  ) {
+    const {
+      error,
+    } = await supabase.rpc(
+      'inativar_locatario_e_encerrar_contratos',
+      {
+        p_locatario_id:
+          id,
+      }
+    )
+
+    if (error) {
+      console.error(
+        'ERRO AO INATIVAR LOCATÁRIO'
+      )
+
+      console.error(
+        'message:',
+        error.message
+      )
+
+      console.error(
+        'code:',
+        error.code
+      )
+
+      console.error(
+        'details:',
+        error.details
+      )
+
+      console.error(
+        'hint:',
+        error.hint
+      )
+
+      throw new Error(
+        'Não foi possível inativar o locatário.'
+      )
+    }
   }
 
-  revalidatePath('/locatarios')
-  revalidatePath(`/locatarios/${id}`)
+  /*
+   * =====================================================
+   * REATIVAR
+   * =====================================================
+   *
+   * Reativar o cadastro NÃO reabre:
+   *
+   * contratos encerrados
+   * mensalidades canceladas
+   * imóveis antigos
+   *
+   * O histórico permanece intacto.
+   */
+
+  else {
+    const {
+      error,
+    } = await supabase
+      .from('locatarios')
+      .update({
+        ativo: true,
+        atualizado_em:
+          new Date().toISOString(),
+      })
+      .eq(
+        'id',
+        id
+      )
+      .eq(
+        'usuario_id',
+        user.id
+      )
+
+    if (error) {
+      console.error(
+        'ERRO AO REATIVAR LOCATÁRIO'
+      )
+
+      console.error(
+        'message:',
+        error.message
+      )
+
+      console.error(
+        'code:',
+        error.code
+      )
+
+      console.error(
+        'details:',
+        error.details
+      )
+
+      console.error(
+        'hint:',
+        error.hint
+      )
+
+      throw new Error(
+        'Não foi possível reativar o locatário.'
+      )
+    }
+  }
+
+  /*
+   * =====================================================
+   * ATUALIZA CACHE
+   * =====================================================
+   */
+
+  revalidatePath(
+    '/locatarios'
+  )
+
+  revalidatePath(
+    `/locatarios/${id}`
+  )
+
+  revalidatePath(
+    '/contratos'
+  )
+
+  revalidatePath(
+    '/imoveis'
+  )
+
+  revalidatePath(
+    '/alugueis'
+  )
+
+  revalidatePath(
+    '/dashboard'
+  )
+
+  revalidatePath(
+    '/relatorios'
+  )
 }

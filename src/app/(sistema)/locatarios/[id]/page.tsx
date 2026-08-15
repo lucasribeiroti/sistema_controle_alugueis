@@ -1,14 +1,24 @@
 import Link from 'next/link'
-import { notFound, redirect } from 'next/navigation'
+
 import {
   ArrowLeft,
-  CircleCheck,
-  CircleX,
   Pencil,
 } from 'lucide-react'
 
-import { createClient } from '@/lib/supabase/server'
-import { alterarStatusLocatario } from './actions'
+import {
+  notFound,
+  redirect,
+} from 'next/navigation'
+
+import {
+  createClient,
+} from '@/lib/supabase/server'
+
+import {
+  alterarStatusLocatario,
+} from './actions'
+
+import BotaoStatusLocatario from './BotaoStatusLocatario'
 
 type Props = {
   params: Promise<{
@@ -16,22 +26,277 @@ type Props = {
   }>
 }
 
+type Locatario = {
+  id: string
+  nome: string
+  tipo_pessoa: string
+  cpf_cnpj: string | null
+  telefone: string | null
+  email: string | null
+  endereco: string | null
+  cep: string | null
+  cidade: string | null
+  estado: string | null
+  observacoes: string | null
+  ativo: boolean
+}
+
+/*
+ * =====================================================
+ * SOMENTE NÚMEROS
+ * =====================================================
+ */
+
+function somenteNumeros(
+  valor: string
+) {
+  return valor.replace(
+    /\D/g,
+    ''
+  )
+}
+
+/*
+ * =====================================================
+ * CPF
+ * =====================================================
+ */
+
+function formatarCpf(
+  valor: string
+) {
+  const numeros =
+    somenteNumeros(
+      valor
+    )
+
+  if (
+    numeros.length !== 11
+  ) {
+    return valor
+  }
+
+  return (
+    numeros.slice(
+      0,
+      3
+    ) +
+    '.' +
+    numeros.slice(
+      3,
+      6
+    ) +
+    '.' +
+    numeros.slice(
+      6,
+      9
+    ) +
+    '-' +
+    numeros.slice(
+      9,
+      11
+    )
+  )
+}
+
+/*
+ * =====================================================
+ * CNPJ
+ * =====================================================
+ */
+
+function formatarCnpj(
+  valor: string
+) {
+  const numeros =
+    somenteNumeros(
+      valor
+    )
+
+  if (
+    numeros.length !== 14
+  ) {
+    return valor
+  }
+
+  return (
+    numeros.slice(
+      0,
+      2
+    ) +
+    '.' +
+    numeros.slice(
+      2,
+      5
+    ) +
+    '.' +
+    numeros.slice(
+      5,
+      8
+    ) +
+    '/' +
+    numeros.slice(
+      8,
+      12
+    ) +
+    '-' +
+    numeros.slice(
+      12,
+      14
+    )
+  )
+}
+
+/*
+ * =====================================================
+ * CPF / CNPJ
+ * =====================================================
+ */
+
+function formatarCpfCnpj(
+  valor: string | null,
+  tipoPessoa: string
+) {
+  if (!valor) {
+    return null
+  }
+
+  if (
+    tipoPessoa === 'PJ'
+  ) {
+    return formatarCnpj(
+      valor
+    )
+  }
+
+  return formatarCpf(
+    valor
+  )
+}
+
+/*
+ * =====================================================
+ * TELEFONE
+ * =====================================================
+ */
+
+function formatarTelefone(
+  valor: string | null
+) {
+  if (!valor) {
+    return null
+  }
+
+  const numeros =
+    somenteNumeros(
+      valor
+    )
+
+  if (
+    numeros.length !== 11
+  ) {
+    return valor
+  }
+
+  return (
+    '(' +
+    numeros.slice(
+      0,
+      2
+    ) +
+    ') ' +
+    numeros.slice(
+      2,
+      7
+    ) +
+    '-' +
+    numeros.slice(
+      7,
+      11
+    )
+  )
+}
+
+/*
+ * =====================================================
+ * CEP
+ * =====================================================
+ */
+
+function formatarCep(
+  valor: string | null
+) {
+  if (!valor) {
+    return null
+  }
+
+  const numeros =
+    somenteNumeros(
+      valor
+    )
+
+  if (
+    numeros.length !== 8
+  ) {
+    return valor
+  }
+
+  return (
+    numeros.slice(
+      0,
+      5
+    ) +
+    '-' +
+    numeros.slice(
+      5,
+      8
+    )
+  )
+}
+
+/*
+ * =====================================================
+ * PÁGINA
+ * =====================================================
+ */
+
 export default async function LocatarioDetalhesPage({
   params,
 }: Props) {
-  const { id } = await params
+  const {
+    id,
+  } = await params
 
-  const supabase = await createClient()
+  const supabase =
+    await createClient()
+
+  /*
+   * =====================================================
+   * AUTENTICAÇÃO
+   * =====================================================
+   */
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: {
+      user,
+    },
+  } =
+    await supabase.auth.getUser()
 
   if (!user) {
     redirect('/login')
   }
 
-  const { data: locatario, error } = await supabase
+  /*
+   * =====================================================
+   * BUSCA
+   * =====================================================
+   */
+
+  const {
+    data: locatario,
+    error,
+  } = await supabase
     .from('locatarios')
     .select(`
       id,
@@ -41,32 +306,59 @@ export default async function LocatarioDetalhesPage({
       telefone,
       email,
       endereco,
+      cep,
+      cidade,
+      estado,
       observacoes,
       ativo
     `)
-    .eq('id', id)
-    .eq('usuario_id', user.id)
+    .eq(
+      'id',
+      id
+    )
+    .eq(
+      'usuario_id',
+      user.id
+    )
     .single()
 
-  if (error || !locatario) {
+  if (
+    error ||
+    !locatario
+  ) {
     notFound()
   }
 
-  const alterarStatusComDados = alterarStatusLocatario.bind(
-    null,
-    locatario.id,
-    locatario.ativo
-  )
+  const locatarioTipado =
+    locatario as Locatario
+
+  /*
+   * =====================================================
+   * SERVER ACTION COM ID
+   * =====================================================
+   */
+
+  const alterarStatusComId =
+    alterarStatusLocatario.bind(
+      null,
+      locatarioTipado.id
+    )
 
   return (
     <div className="space-y-8">
-      {/* Cabeçalho */}
+      {/* ==================================================
+          CABEÇALHO
+          ================================================== */}
+
       <div>
         <Link
           href="/locatarios"
           className="mb-4 inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-900"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft
+            size={16}
+          />
+
           Voltar para locatários
         </Link>
 
@@ -74,17 +366,19 @@ export default async function LocatarioDetalhesPage({
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-bold text-slate-900">
-                {locatario.nome}
+                {locatarioTipado.nome}
               </h1>
 
               <span
                 className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                  locatario.ativo
+                  locatarioTipado.ativo
                     ? 'bg-emerald-50 text-emerald-700'
                     : 'bg-slate-200 text-slate-600'
                 }`}
               >
-                {locatario.ativo ? 'Ativo' : 'Inativo'}
+                {locatarioTipado.ativo
+                  ? 'Ativo'
+                  : 'Inativo'}
               </span>
             </div>
 
@@ -93,91 +387,135 @@ export default async function LocatarioDetalhesPage({
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            {/* Ativar / Inativar */}
-            <form action={alterarStatusComDados}>
-              <button
-                type="submit"
-                className={`inline-flex items-center gap-2 rounded-lg px-5 py-3 font-medium text-white transition ${
-                  locatario.ativo
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : 'bg-emerald-600 hover:bg-emerald-700'
-                }`}
-              >
-                {locatario.ativo ? (
-                  <>
-                    <CircleX size={18} />
-                    Inativar
-                  </>
-                ) : (
-                  <>
-                    <CircleCheck size={18} />
-                    Reativar
-                  </>
-                )}
-              </button>
-            </form>
+          {/* ==============================================
+              AÇÕES
+              ============================================== */}
 
-            {/* Editar */}
+          <div className="flex flex-wrap gap-3">
+            <BotaoStatusLocatario
+              ativo={
+                locatarioTipado.ativo
+              }
+              alterarStatusAction={
+                alterarStatusComId
+              }
+            />
+
             <Link
-              href={`/locatarios/${locatario.id}/editar`}
+              href={`/locatarios/${locatarioTipado.id}/editar`}
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-medium text-white transition hover:bg-blue-700"
             >
-              <Pencil size={18} />
+              <Pencil
+                size={18}
+              />
+
               Editar
             </Link>
           </div>
         </div>
       </div>
 
-      {/* Informações */}
+      {/* ==================================================
+          INFORMAÇÕES
+          ================================================== */}
+
       <div className="rounded-xl border border-slate-200 bg-white p-8">
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           <Campo
             titulo="Nome / Razão social"
-            valor={locatario.nome}
+            valor={
+              locatarioTipado.nome
+            }
           />
 
           <Campo
             titulo="Tipo de pessoa"
             valor={
-              locatario.tipo_pessoa === 'PF'
+              locatarioTipado.tipo_pessoa ===
+              'PF'
                 ? 'Pessoa Física'
                 : 'Pessoa Jurídica'
             }
           />
 
           <Campo
-            titulo="CPF / CNPJ"
-            valor={locatario.cpf_cnpj}
+            titulo={
+              locatarioTipado.tipo_pessoa ===
+              'PF'
+                ? 'CPF'
+                : 'CNPJ'
+            }
+            valor={
+              formatarCpfCnpj(
+                locatarioTipado.cpf_cnpj,
+                locatarioTipado.tipo_pessoa
+              )
+            }
           />
 
           <Campo
             titulo="Telefone"
-            valor={locatario.telefone}
+            valor={
+              formatarTelefone(
+                locatarioTipado.telefone
+              )
+            }
           />
 
           <Campo
             titulo="E-mail"
-            valor={locatario.email}
+            valor={
+              locatarioTipado.email
+            }
           />
 
           <Campo
             titulo="Status"
-            valor={locatario.ativo ? 'Ativo' : 'Inativo'}
+            valor={
+              locatarioTipado.ativo
+                ? 'Ativo'
+                : 'Inativo'
+            }
           />
 
           <div className="md:col-span-2 lg:col-span-3">
             <Campo
               titulo="Endereço"
-              valor={locatario.endereco}
+              valor={
+                locatarioTipado.endereco
+              }
             />
           </div>
+
+          <Campo
+            titulo="CEP"
+            valor={
+              formatarCep(
+                locatarioTipado.cep
+              )
+            }
+          />
+
+          <Campo
+            titulo="Cidade"
+            valor={
+              locatarioTipado.cidade
+            }
+          />
+
+          <Campo
+            titulo="Estado"
+            valor={
+              locatarioTipado.estado
+            }
+          />
 
           <div className="md:col-span-2 lg:col-span-3">
             <Campo
               titulo="Observações"
-              valor={locatario.observacoes}
+              valor={
+                locatarioTipado.observacoes
+              }
             />
           </div>
         </div>
@@ -186,12 +524,22 @@ export default async function LocatarioDetalhesPage({
   )
 }
 
+/*
+ * =====================================================
+ * CAMPO
+ * =====================================================
+ */
+
 function Campo({
   titulo,
   valor,
 }: {
   titulo: string
-  valor: string | null | undefined
+
+  valor:
+    | string
+    | null
+    | undefined
 }) {
   return (
     <div>
@@ -200,7 +548,8 @@ function Campo({
       </p>
 
       <p className="mt-1 text-base text-slate-900">
-        {valor || 'Não informado'}
+        {valor ||
+          'Não informado'}
       </p>
     </div>
   )
